@@ -1,13 +1,13 @@
-package io.ontola.ori_api;
+package io.ontola.ori.api;
 
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
 /**
- * Unit test for simple OriAPI.
+ * Unit test for simple OriApi.
  */
-public class OriAPITest
+public class OriApiTest
 {
     /**
      * Rigorous Test :-)
