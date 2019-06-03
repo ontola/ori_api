@@ -20,6 +20,7 @@ package io.ontola.ori.api;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
@@ -36,8 +37,8 @@ public class OriApi {
 
   /** Starts listening to kafka and process incoming messages. */
   public static void main(String[] args) {
-    System.out.println("Starting ORI API");
     Properties config = initConfig();
+    printInitMessage(config);
 
     ensureOutputFolder(config);
 
@@ -80,6 +81,14 @@ public class OriApi {
         System.getProperty("io.ontola.ori.api.supplantIRI", "http://purl.org/link-lib/supplant")
     );
     config.setProperty(
+        "ori.api.kafka.clusterApiKey",
+        System.getProperty("io.ontola.ori.api.kafka.clusterApiKey", "")
+    );
+    config.setProperty(
+        "ori.api.kafka.clusterApiSecret",
+        System.getProperty("io.ontola.ori.api.kafka.clusterApiSecret", "")
+    );
+    config.setProperty(
         "ori.api.kafka.group_id",
         System.getProperty("io.ontola.ori.api.kafka.group_id", "ori_api")
     );
@@ -92,7 +101,11 @@ public class OriApi {
         System.getProperty("io.ontola.ori.api.kafka.port", "9092")
     );
     config.setProperty(
-        "ori.api.kafka.hostname",
+        "ori.api.kafka.address",
+        System.getProperty("io.ontola.ori.api.kafka.address", "")
+    );
+    config.setProperty(
+        "ori.api.kafka.topic",
         System.getProperty("io.ontola.ori.api.kafka.topic", "ori-delta")
     );
     String hostname = config.getProperty("ori.api.kafka.hostname");
@@ -104,5 +117,17 @@ public class OriApi {
     config.setProperty("ori.api.kafka.address", address);
 
     return config;
+  }
+
+  private static void printInitMessage(Properties p) {
+    System.out.println("================================================");
+    System.out.printf("Starting ORI API\n\n");
+    Enumeration keys = p.keys();
+    while (keys.hasMoreElements()) {
+      String key = (String)keys.nextElement();
+      String value = (String)p.get(key);
+      System.out.println(key.substring("ori.api.".length()) + ": " + value);
+    }
+    System.out.println("================================================");
   }
 }

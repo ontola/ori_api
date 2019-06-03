@@ -21,6 +21,8 @@ package io.ontola.ori.api;
 import com.github.jsonldjava.shaded.com.google.common.base.Splitter;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -29,37 +31,91 @@ import java.util.Properties;
 
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Resource;
+import org.eclipse.rdf4j.model.Statement;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
+import org.eclipse.rdf4j.rio.*;
+import org.eclipse.rdf4j.rio.helpers.JSONLDMode;
+import org.eclipse.rdf4j.rio.helpers.JSONLDSettings;
+import org.zeroturnaround.zip.ZipUtil;
 
 /**
- * A resource in the ORI API
+ * A resource in the ORI API.
  */
-public class Document {
-  private static MessageDigest digester = getDigester();
-
+class Document {
   private Properties config;
 
-  public final String iri;
-  public final String id;
-  public final String hashedId;
-  public final Resource subject;
-  public final Iterable<String> hashKeys;
-  public final Model data;
+  final File baseDir;
+  final String iri;
+  final String id;
+  final Resource subject;
+  final Model data;
+  final String version;
 
-  Document(String iri, Model data, Properties config) {
+
+  Document(String iri, Model data, String version, File baseDir, Properties config) {
     this.iri = iri;
     this.data = data;
+    this.version = version;
     this.config = config;
 
     this.id = this.iri.substring(this.iri.lastIndexOf('/') + 1);
     this.subject = SimpleValueFactory.getInstance().createIRI(iri);
-    byte[] md5sum = digester.digest(id.getBytes());
-    this.hashedId = String.format("%032x", new BigInteger(1, md5sum));
-    this.hashKeys = Splitter.fixedLength(2).split(this.hashedId);
+    this.baseDir = baseDir;
   }
 
-  public File dir() {
-    return new File(config.getProperty("ori.api.dataDir") + "/" + String.join("/", this.hashKeys));
+  File dir() {
+    return new File(String.format("%s/%s", baseDir.getAbsolutePath(), this.version));
+  }
+
+
+  void save() {
+    RDFFormat[] formats = {
+      RDFFormat.NTRIPLES,
+      RDFFormat.N3,
+      RDFFormat.NQUADS,
+      RDFFormat.TURTLE,
+      RDFFormat.JSONLD,
+      RDFFormat.RDFJSON,
+    };
+
+    System.out.printf("Writing subject '%s' with version '%s'\n", this.subject, this.version);
+    File filepath = this.dir();
+    if (!filepath.exists() && !filepath.mkdirs()) {
+      throw new Error(String.format("Couldn't create directory '%s'", filepath));
+    }
+
+    for (RDFFormat format : formats) {
+      String filename = this.id + "." + format.getDefaultFileExtension();
+      String file = filepath + "/" + filename;
+      try {
+        RDFWriter rdfWriter = Rio.createWriter(format, new FileOutputStream(file));
+        this.handleNamespaces(rdfWriter);
+        if (format == RDFFormat.JSONLD) {
+          WriterConfig jsonldConfig = new WriterConfig();
+          jsonldConfig.set(JSONLDSettings.JSONLD_MODE, JSONLDMode.COMPACT);
+          jsonldConfig.set(JSONLDSettings.USE_NATIVE_TYPES, true);
+          jsonldConfig.set(JSONLDSettings.HIERARCHICAL_VIEW, true);
+          rdfWriter.setWriterConfig(jsonldConfig);
+        }
+        rdfWriter.startRDF();
+        for (Statement s : this.data.filter(this.subject, null, null)) {
+          rdfWriter.handleStatement(s);
+        }
+        rdfWriter.endRDF();
+      } catch (FileNotFoundException e) {
+        System.out.printf("Couldn't create file '%s' because '%s' \n", file, e.toString());
+      }
+    }
+
+    String archiveName = this.id + ".zip";
+    File archive = new File(filepath + "/" + archiveName);
+    if (archive.exists()) {
+      archive.delete();
+    }
+    ZipUtil.pack(filepath, archive);
+    if (ZipUtil.containsEntry(archive, archiveName)) {
+      ZipUtil.removeEntry(archive, archiveName);
+    }
   }
 
   @Override
@@ -80,19 +136,8 @@ public class Document {
     return Objects.hash(iri);
   }
 
-  /**
-   * Hard check for an MD5 digester.
-   * No fallback is used since that could cause inconsistent results when multiple hash methods are mixed.
-   */
-  private static MessageDigest getDigester() {
-    MessageDigest digester = null;
-    try {
-      digester = MessageDigest.getInstance("MD5");
-    } catch (NoSuchAlgorithmException e) {
-      System.out.println("[FATAL] No MD5 MessageDigest algorithm support, exiting");
-      System.exit(1);
-    }
-
-    return digester;
+  private void handleNamespaces(RDFHandler h) {
+    // h.handleNamespace("@vocab", "http://schema.org/");
+    h.handleNamespace("schema", "http://schema.org/");
   }
 }

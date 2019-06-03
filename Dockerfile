@@ -20,6 +20,8 @@ ENV KAFKA_GROUP_ID "ori_api"
 ENV BASE_IRI "https://id.openraadsinformatie.nl"
 ENV SUPPLANT_IRI "http://purl.org/link-lib/supplant"
 ENV THREAD_COUNT 1
+ENV CLUSTER_API_KEY ""
+ENV CLUSTER_API_SECRET ""
 
 VOLUME /var/lib/data/id
 
@@ -34,4 +36,6 @@ CMD ["sh", \
     -Dio.ontola.ori.api.supplantIRI=${SUPPLANT_IRI} \
     -Dio.ontola.ori.api.dataDir=/var/opt/ori_data/id \
     -Dio.ontola.ori.api.threads=${THREAD_COUNT} \
+    -Dio.ontola.ori.api.kafka.clusterApiKey=${CLUSTER_API_KEY} \
+    -Dio.ontola.ori.api.kafka.clusterApiSecret=${CLUSTER_API_SECRET} \
     -jar ori.api-1.0-SNAPSHOT.jar"]

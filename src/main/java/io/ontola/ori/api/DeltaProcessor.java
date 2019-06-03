@@ -28,24 +28,24 @@ import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.KafkaException;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Statement;
 import org.eclipse.rdf4j.model.impl.LinkedHashModel;
 import org.eclipse.rdf4j.rio.*;
-import org.eclipse.rdf4j.rio.helpers.JSONLDMode;
-import org.eclipse.rdf4j.rio.helpers.JSONLDSettings;
 import org.eclipse.rdf4j.rio.helpers.StatementCollector;
-import org.zeroturnaround.zip.ZipUtil;
+import org.apache.kafka.common.serialization.StringDeserializer;
 
-public class DeltaProcessor implements Runnable {
+class DeltaProcessor implements Runnable {
   private Properties config;
+  private static final String deserializerClass = "org.apache.kafka.common.serialization.StringDeserializer";
 
   DeltaProcessor(Properties config) {
     this.config = config;
   }
 
   public void run() {
-    System.out.printf("[%s] Started thread\n", Thread.currentThread().getName());
+    this.printlnWithThread("Started thread");
     KafkaConsumer<String, String> consumer = oriDeltaSubscriber();
     String baseDocument = config.getProperty("ori.api.baseIRI");
 
@@ -59,16 +59,21 @@ public class DeltaProcessor implements Runnable {
         rdfParser.setRDFHandler(new StatementCollector(deltaEvent));
 
         try (StringReader streamString = new StringReader(record.value())) {
-          System.out.printf("[start][%s] Processing message\n", record.timestamp());
+          this.printlnWithThread("[start][%s] Processing message", record.timestamp());
           rdfParser.parse(streamString, baseDocument);
-          List<Document> documents = partitionDelta(deltaEvent);
-          processDocuments(documents);
-        } catch (IOException | RDFParseException | RDFHandlerException e) {
-          System.out.printf("Exception while parsing delta event: '%s'\n", e.toString());
+          partitionDelta(deltaEvent)
+            .forEach(DeltaEvent::process);
+        } catch (Exception e) {
+          this.printlnWithThread("Exception while parsing delta event: '%s'\n", e.toString());
+          e.printStackTrace();
         }
-        System.out.printf("[end][%s] Done with message\n", record.timestamp());
+        this.printlnWithThread("[end][%s] Done with message\n", record.timestamp());
       }
     }
+  }
+
+  private void printlnWithThread(String message, Object... opts) {
+    System.out.printf("[%s] %s\n", Thread.currentThread().getName(), String.format(message, opts));
   }
 
   private KafkaConsumer<String, String> oriDeltaSubscriber() {
@@ -77,34 +82,66 @@ public class DeltaProcessor implements Runnable {
     kafkaOpts.setProperty("group.id", config.getProperty("ori.api.kafka.group_id"));
     kafkaOpts.setProperty("enable.auto.commit", "true");
     kafkaOpts.setProperty("auto.commit.interval.ms", "1000");
-    kafkaOpts.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-    kafkaOpts.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+    kafkaOpts.setProperty("key.deserializer", DeltaProcessor.deserializerClass);
+    kafkaOpts.setProperty("value.deserializer", DeltaProcessor.deserializerClass);
+    kafkaOpts.setProperty("request.timeout.ms", "20000");
+    kafkaOpts.setProperty("retry.backoff.ms", "500");
+
+    // Force inclusion of the deserializer into the uber jar
+    if (StringDeserializer.class == null) {
+      System.out.println("StringDeserializer class not found");
+    }
+
+    String clusterApiKey = config.getProperty("ori.api.kafka.clusterApiKey");
+    String clusterApiSecret = config.getProperty("ori.api.kafka.clusterApiSecret");
+    if (clusterApiKey == null || "".equals(clusterApiKey) || clusterApiSecret == null || "".equals(clusterApiSecret)) {
+      System.out.println("Either cluster API key or secret was left blank, skipping SASL authentication");
+    } else {
+      kafkaOpts.setProperty("ssl.endpoint.identification.algorithm", "https");
+      kafkaOpts.setProperty("sasl.mechanism", "PLAIN");
+      String jaasConfig = String.format(
+          "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+          clusterApiKey,
+          clusterApiSecret
+      );
+      kafkaOpts.setProperty("sasl.jaas.config", jaasConfig);
+      kafkaOpts.setProperty("security.protocol", "SASL_SSL");
+    }
 
     String topic = config.getProperty("io.ontola.ori.api.kafka.topic", "ori-delta");
 
-    System.out.printf("Connecting to kafka on '%s' with group '%s' and topic '%s' \n",
+    this.printlnWithThread("Connecting to kafka on '%s' with group '%s' and topic '%s' \n",
         kafkaOpts.get("bootstrap.servers"),
         kafkaOpts.get("group.id"),
         topic);
+    KafkaConsumer<String, String> consumer;
+    try {
+      consumer = new KafkaConsumer<>(kafkaOpts);
+      consumer.subscribe(Arrays.asList(topic));
 
-    KafkaConsumer<String, String> consumer = new KafkaConsumer<>(kafkaOpts);
-    consumer.subscribe(Arrays.asList(topic));
+      return consumer;
+    } catch (KafkaException e) {
+      Throwable c = e.getCause();
+      String message = c == null ? e.getMessage() : c.getMessage();
+      this.printlnWithThread(String.format("[FATAL] Error while creating subscriber: %s", message));
+      Thread.currentThread().interrupt();
+    }
 
-    return consumer;
+    return null;
   }
 
   /**
    * Partitions a delta into separate models for processing.
    */
-  private List<Document> partitionDelta(Model deltaEvent) {
-    List<Document> parts = new ArrayList<>();
+  private List<DeltaEvent> partitionDelta(Model deltaEvent) {
+    List<DeltaEvent> parts = new ArrayList<>();
     // TODO: implement an RDFHandler which does this while parsing
     for (Statement s : deltaEvent) {
       if (!s.getContext().toString().equals(config.getProperty("ori.api.supplantIRI"))) {
-        System.out.printf("Expected supplant statement, got %s", s.getContext());
+        this.printlnWithThread("Expected supplant statement, got %s", s.getContext());
         continue;
       }
-      Document target = new Document(s.getSubject().toString(), new LinkedHashModel(), config);
+      DeltaEvent target = new DeltaEvent(s.getSubject().toString(), config);
       if (!parts.contains(target)) {
         parts.add(target);
       }
@@ -116,12 +153,11 @@ public class DeltaProcessor implements Runnable {
           parts.size(),
           parts.get(0).iri));
       }
-      parts.get(index).data.add(s.getSubject(), s.getPredicate(), s.getObject());
+      parts.get(index).deltaAdd(s.getSubject(), s.getPredicate(), s.getObject());
     }
 
     return parts;
   }
-
 
   private void processDocuments(List<Document> models) {
     models.forEach((Document doc) -> {
@@ -133,66 +169,11 @@ public class DeltaProcessor implements Runnable {
       File streamsFile = new File(filePath + ".activity.json");
       if (!streamsFile.exists()) {
         // Create empty streamfile
-        System.out.println("Resource has no activitystream");
+        this.printlnWithThread("Resource has no activitystream");
       }
       // Append create or update action to streamfile
       // Process model
-      storeResource(doc);
+      doc.save();
     });
-  }
-
-  private static void storeResource(Document doc) {
-    RDFFormat[] formats = {
-      RDFFormat.NTRIPLES,
-      RDFFormat.N3,
-      RDFFormat.NQUADS,
-      RDFFormat.TURTLE,
-      RDFFormat.JSONLD,
-      RDFFormat.RDFJSON,
-    };
-
-    System.out.println("Processing " + doc.subject);
-    File filepath = doc.dir();
-    if (!filepath.exists() && !filepath.mkdirs()) {
-      throw new Error(String.format("Couldn't create directory '%s'", filepath));
-    }
-
-    for (RDFFormat format : formats) {
-      String filename = doc.id + "." + format.getDefaultFileExtension();
-      String file = filepath + "/" + filename;
-      try {
-        RDFWriter rdfWriter = Rio.createWriter(format, new FileOutputStream(file));
-        handleNamespaces(rdfWriter);
-        if (format == RDFFormat.JSONLD) {
-          WriterConfig jsonldConfig = new WriterConfig();
-          jsonldConfig.set(JSONLDSettings.JSONLD_MODE, JSONLDMode.COMPACT);
-          jsonldConfig.set(JSONLDSettings.USE_NATIVE_TYPES, true);
-          jsonldConfig.set(JSONLDSettings.HIERARCHICAL_VIEW, true);
-          rdfWriter.setWriterConfig(jsonldConfig);
-        }
-        rdfWriter.startRDF();
-        for (Statement s : doc.data.filter(doc.subject, null, null)) {
-          rdfWriter.handleStatement(s);
-        }
-        rdfWriter.endRDF();
-      } catch (FileNotFoundException e) {
-        System.out.printf("Couldn't create file '%s' because '%s' \n", file, e.toString());
-      }
-    }
-
-    String archiveName = doc.id + ".zip";
-    File archive = new File(filepath + "/" + archiveName);
-    if (archive.exists()) {
-      archive.delete();
-    }
-    ZipUtil.pack(filepath, archive);
-    if (ZipUtil.containsEntry(archive, archiveName)) {
-      ZipUtil.removeEntry(archive, archiveName);
-    }
-  }
-
-  private static void handleNamespaces(RDFHandler h) {
-    // h.handleNamespace("@vocab", "http://schema.org/");
-    h.handleNamespace("schema", "http://schema.org/");
   }
 }
