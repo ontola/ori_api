@@ -22,10 +22,10 @@ ENV KAFKA_GROUP_ID "ori_api"
 ENV BASE_IRI "https://id.openraadsinformatie.nl"
 ENV SUPPLANT_IRI "http://purl.org/link-lib/supplant"
 ENV THREAD_COUNT 1
-ENV CLUSTER_API_KEY ""
-ENV CLUSTER_API_SECRET ""
+ENV KAFKA_USERNAME ""
+ENV KAFKA_SECRET ""
 ENV DATA_DIR "/var/opt/ori_data/id"
 
-VOLUME /var/lib/data/id
+VOLUME /var/opt/ori_data/id
 
 CMD "bin/ori_api"
