@@ -87,44 +87,44 @@ fun initConfig(): Properties {
     val config = Properties()
 
     config.setProperty(
-            "ori.api.dataDir",
-            (System.getenv("DATA_DIR") ?: "${System.getProperty("java.io.tmpdir")}/id")
+        "ori.api.dataDir",
+        (System.getenv("DATA_DIR") ?: "${System.getProperty("java.io.tmpdir")}/id")
     )
     config.setProperty(
-            "ori.api.baseIRI",
-            (System.getenv("BASE_IRI") ?: "https://id.openraadsinformatie.nl")
+        "ori.api.baseIRI",
+        (System.getenv("BASE_IRI") ?: "https://id.openraadsinformatie.nl")
     )
     config.setProperty(
-            "ori.api.supplantIRI",
-            (System.getenv("SUPPLANT_IRI") ?: "http://purl.org/link-lib/supplant")
+        "ori.api.supplantIRI",
+        (System.getenv("SUPPLANT_IRI") ?: "http://purl.org/link-lib/supplant")
     )
     config.setProperty(
-            "ori.api.kafka.clusterApiKey",
-            (System.getenv("KAFKA_USERNAME") ?: "")
+        "ori.api.kafka.clusterApiKey",
+        (System.getenv("KAFKA_USERNAME") ?: "")
     )
     config.setProperty(
-            "ori.api.kafka.clusterApiSecret",
-            (System.getenv("KAFKA_SECRET") ?: "")
+        "ori.api.kafka.clusterApiSecret",
+        (System.getenv("KAFKA_SECRET") ?: "")
     )
     config.setProperty(
-            "ori.api.kafka.group_id",
-            (System.getenv("KAFKA_GROUP_ID") ?: "ori_api")
+        "ori.api.kafka.group_id",
+        (System.getenv("KAFKA_GROUP_ID") ?: "ori_api")
     )
     config.setProperty(
-            "ori.api.kafka.hostname",
-            (System.getenv("KAFKA_HOSTNAME") ?: "localhost")
+        "ori.api.kafka.hostname",
+        (System.getenv("KAFKA_HOSTNAME") ?: "localhost")
     )
     config.setProperty(
-            "ori.api.kafka.port",
-            (System.getenv("KAFKA_PORT") ?: "9092")
+        "ori.api.kafka.port",
+        (System.getenv("KAFKA_PORT") ?: "9092")
     )
     config.setProperty(
-            "ori.api.kafka.address",
-            (System.getenv("KAFKA_ADDRESS") ?: "")
+        "ori.api.kafka.address",
+        (System.getenv("KAFKA_ADDRESS") ?: "")
     )
     config.setProperty(
-            "ori.api.kafka.topic",
-            (System.getenv("DELTA_TOPIC") ?: "ori-delta")
+        "ori.api.kafka.topic",
+        (System.getenv("DELTA_TOPIC") ?: "ori-delta")
     )
     val hostname = config.getProperty("ori.api.kafka.hostname")
     val port = config.getProperty("ori.api.kafka.port")
@@ -156,9 +156,9 @@ fun oriDeltaSubscriber(config: Properties): KafkaConsumer<String, String> {
         kafkaOpts.setProperty("ssl.endpoint.identification.algorithm", "https")
         kafkaOpts.setProperty("sasl.mechanism", "PLAIN")
         val jaasConfig = String.format(
-                "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
-                clusterApiKey,
-                clusterApiSecret
+            "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+            clusterApiKey,
+            clusterApiSecret
         )
         kafkaOpts.setProperty("sasl.jaas.config", jaasConfig)
         kafkaOpts.setProperty("security.protocol", "SASL_SSL")
@@ -166,20 +166,22 @@ fun oriDeltaSubscriber(config: Properties): KafkaConsumer<String, String> {
 
     val topic = config.getProperty("ori.api.kafka.topic", "ori-delta")
 
-    System.out.printf("Connecting to kafka on '%s' with group '%s' and topic '%s' \n",
-            kafkaOpts.getProperty("bootstrap.servers"),
-            kafkaOpts.getProperty("group.id"),
-            topic)
+    System.out.printf(
+        "Connecting to kafka on '%s' with group '%s' and topic '%s' \n",
+        kafkaOpts.getProperty("bootstrap.servers"),
+        kafkaOpts.getProperty("group.id"),
+        topic
+    )
 
     try {
         val consumer = KafkaConsumer<String, String>(kafkaOpts)
         consumer.subscribe(Arrays.asList(topic))
 
         val partitionList = consumer
-                .partitionsFor(topic)
-                .stream()
-                .map { t: PartitionInfo -> Integer.toString(t.partition()) }
-                .collect(Collectors.joining("," ))
+            .partitionsFor(topic)
+            .stream()
+            .map { t: PartitionInfo -> Integer.toString(t.partition()) }
+            .collect(Collectors.joining(","))
 
         System.out.printf("Subscribed to topic '%s' with partitions '%s'", topic, partitionList)
 

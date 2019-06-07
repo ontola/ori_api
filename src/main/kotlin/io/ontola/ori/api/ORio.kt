@@ -10,8 +10,10 @@ import org.eclipse.rdf4j.rio.helpers.JSONLDMode
 import org.eclipse.rdf4j.rio.helpers.JSONLDSettings
 import java.io.OutputStream
 
-fun createWriter(format: RDFFormat,
-                 out: OutputStream): ORio {
+fun createWriter(
+    format: RDFFormat,
+    out: OutputStream
+): ORio {
     val rdfWriter = Rio.createWriter(format, out)
 
     return ORio(rdfWriter)
@@ -23,7 +25,7 @@ fun createWriter(format: RDFFormat,
  * Base Rio implementations will include _all_ namespaces added by RDFWriter::handleNamespace, which results in a large
  * list of unused namespaces.
  */
-class ORio(private val writer: RDFWriter): RDFWriter by writer {
+class ORio(private val writer: RDFWriter) : RDFWriter by writer {
 
     init {
         val writerConfig = WriterConfig()

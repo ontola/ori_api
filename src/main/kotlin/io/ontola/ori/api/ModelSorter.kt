@@ -7,7 +7,7 @@ import org.eclipse.rdf4j.model.Statement
  *
  * Orders the type statements first, followed by the attributes, and then the associations.
  */
-class ModelSorter: Comparator<Statement> {
+class ModelSorter : Comparator<Statement> {
     override fun compare(p0: Statement, p1: Statement): Int {
         val subject = compareSubject(p0, p1)
         if (subject != 0) {
@@ -41,7 +41,7 @@ class ModelSorter: Comparator<Statement> {
         return p0.subject.stringValue().compareTo(p1.subject.stringValue())
     }
 
-    private fun compareType(p0: Statement,  p1: Statement): Int {
+    private fun compareType(p0: Statement, p1: Statement): Int {
         val p0IsType = p0.subject.stringValue() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
         val p1IsType = p1.subject.stringValue() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
         if (p0IsType && p1IsType) {
