@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.PartitionInfo
 import java.io.File
+import java.lang.Exception
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 import java.time.Duration
@@ -53,14 +54,20 @@ fun main() {
         interrupted = true
     })
 
-    val consumer = oriDeltaSubscriber(config)
+    try {
+        val consumer = oriDeltaSubscriber(config)
 
-    while (!interrupted) {
-        val records: ConsumerRecords<String, String> = consumer.poll(Duration.ofMillis(100))
-        for (record in records) {
-            val p = DeltaProcessor(record, config)
-            tasks.add(s.submit(p))
+        while (!interrupted) {
+            val records: ConsumerRecords<String, String> = consumer.poll(Duration.ofMillis(100))
+            for (record in records) {
+                val p = DeltaProcessor(record, config)
+                tasks.add(s.submit(p))
+            }
         }
+    } catch (e: Exception) {
+        System.out.println("Fatal error occurred: ${e.message}")
+        e.printStackTrace()
+        System.exit(1)
     }
 }
 
@@ -189,10 +196,7 @@ fun oriDeltaSubscriber(config: Properties): KafkaConsumer<String, String> {
     } catch (e: KafkaException) {
         val c: Throwable? = e.cause
         val message = (c ?: e).message
-        System.out.printf("[FATAL] Error while creating subscriber: %s\n", message)
-        Thread.currentThread().interrupt()
-
-        return null as KafkaConsumer<String, String>
+        throw Exception("[FATAL] Error while creating subscriber: $message\n", e)
     }
 }
 
