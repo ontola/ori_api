@@ -17,13 +17,18 @@
  */
 package io.ontola.ori.api
 
+import org.apache.kafka.clients.consumer.ConsumerRecords
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.PartitionInfo
 import java.io.File
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
-import java.util.ArrayList
-import java.util.Properties
+import java.time.Duration
+import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import java.util.stream.Collectors
 
 /**
  * Listens to kafka streams and processes delta streams into the file system.
@@ -41,13 +46,22 @@ fun main() {
     val s = Executors.newFixedThreadPool(threadCount)
     val tasks = ArrayList<Future<*>>()
 
+    var interrupted = false
     Runtime.getRuntime().addShutdownHook(Thread {
         s.shutdown()
         tasks.forEach { t -> t.cancel(true) }
+        interrupted = true
     })
 
-    val p = DeltaProcessor(config)
-    tasks.add(s.submit(p))
+    val consumer = oriDeltaSubscriber(config)
+
+    while (!interrupted) {
+        val records: ConsumerRecords<String, String> = consumer.poll(Duration.ofMillis(100))
+        for (record in records) {
+            val p = DeltaProcessor(record, config)
+            tasks.add(s.submit(p))
+        }
+    }
 }
 
 fun ensureOutputFolder(settings: Properties) {
@@ -86,11 +100,11 @@ fun initConfig(): Properties {
     )
     config.setProperty(
             "ori.api.kafka.clusterApiKey",
-            (System.getenv("CLUSTER_API_KEY") ?: "")
+            (System.getenv("KAFKA_USERNAME") ?: "")
     )
     config.setProperty(
             "ori.api.kafka.clusterApiSecret",
-            (System.getenv("CLUSTER_API_SECRET") ?: "")
+            (System.getenv("KAFKA_SECRET") ?: "")
     )
     config.setProperty(
             "ori.api.kafka.group_id",
@@ -121,6 +135,63 @@ fun initConfig(): Properties {
     config.setProperty("ori.api.kafka.address", address)
 
     return config
+}
+
+fun oriDeltaSubscriber(config: Properties): KafkaConsumer<String, String> {
+    val kafkaOpts = Properties()
+    kafkaOpts.setProperty("bootstrap.servers", config.getProperty("ori.api.kafka.address"))
+    kafkaOpts.setProperty("group.id", config.getProperty("ori.api.kafka.group_id"))
+    kafkaOpts.setProperty("enable.auto.commit", "true")
+    kafkaOpts.setProperty("auto.commit.interval.ms", "1000")
+    kafkaOpts.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    kafkaOpts.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    kafkaOpts.setProperty("request.timeout.ms", "20000")
+    kafkaOpts.setProperty("retry.backoff.ms", "500")
+
+    val clusterApiKey = config.getProperty("ori.api.kafka.clusterApiKey")
+    val clusterApiSecret = config.getProperty("ori.api.kafka.clusterApiSecret")
+    if (clusterApiKey == null || "".equals(clusterApiKey) || clusterApiSecret == null || "".equals(clusterApiSecret)) {
+        System.out.println("Either cluster API key or secret was left blank, skipping SASL authentication")
+    } else {
+        kafkaOpts.setProperty("ssl.endpoint.identification.algorithm", "https")
+        kafkaOpts.setProperty("sasl.mechanism", "PLAIN")
+        val jaasConfig = String.format(
+                "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                clusterApiKey,
+                clusterApiSecret
+        )
+        kafkaOpts.setProperty("sasl.jaas.config", jaasConfig)
+        kafkaOpts.setProperty("security.protocol", "SASL_SSL")
+    }
+
+    val topic = config.getProperty("ori.api.kafka.topic", "ori-delta")
+
+    System.out.printf("Connecting to kafka on '%s' with group '%s' and topic '%s' \n",
+            kafkaOpts.getProperty("bootstrap.servers"),
+            kafkaOpts.getProperty("group.id"),
+            topic)
+
+    try {
+        val consumer = KafkaConsumer<String, String>(kafkaOpts)
+        consumer.subscribe(Arrays.asList(topic))
+
+        val partitionList = consumer
+                .partitionsFor(topic)
+                .stream()
+                .map { t: PartitionInfo -> Integer.toString(t.partition()) }
+                .collect(Collectors.joining("," ))
+
+        System.out.printf("Subscribed to topic '%s' with partitions '%s'", topic, partitionList)
+
+        return consumer
+    } catch (e: KafkaException) {
+        val c: Throwable? = e.cause
+        val message = (c ?: e).message
+        System.out.printf("[FATAL] Error while creating subscriber: %s\n", message)
+        Thread.currentThread().interrupt()
+
+        return null as KafkaConsumer<String, String>
+    }
 }
 
 /**

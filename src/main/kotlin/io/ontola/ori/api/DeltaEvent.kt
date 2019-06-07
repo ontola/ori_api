@@ -1,6 +1,7 @@
 package io.ontola.ori.api
 
 import com.google.common.base.Splitter
+import org.eclipse.rdf4j.model.*
 
 import java.io.File
 import java.io.IOException
@@ -12,10 +13,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Properties
 
-import org.eclipse.rdf4j.model.IRI
-import org.eclipse.rdf4j.model.Model
-import org.eclipse.rdf4j.model.Resource
-import org.eclipse.rdf4j.model.Value
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 
 class DeltaEvent(val iri: String,
@@ -43,6 +40,14 @@ class DeltaEvent(val iri: String,
 
   fun deltaAdd(s: Resource, p: IRI, o: Value): Boolean {
     return delta.add(s, p, o)
+  }
+
+  fun deltaAdd(s: Statement): Boolean {
+    return delta.add(s.subject, s.predicate, s.`object`)
+  }
+
+  fun anyObject(o: Resource): Boolean {
+    return delta.any { stmt -> stmt.`object` == o }
   }
 
   fun findLatestDocument(): String {
