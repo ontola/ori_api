@@ -111,7 +111,7 @@ fun initConfig(): Properties {
     )
     config.setProperty(
         "ori.api.kafka.clusterApiSecret",
-        (System.getenv("KAFKA_SECRET") ?: "")
+        (System.getenv("KAFKA_PASSWORD") ?: "")
     )
     config.setProperty(
         "ori.api.kafka.group_id",

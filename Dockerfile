@@ -23,7 +23,7 @@ ENV BASE_IRI "https://id.openraadsinformatie.nl"
 ENV SUPPLANT_IRI "http://purl.org/link-lib/supplant"
 ENV THREAD_COUNT 1
 ENV KAFKA_USERNAME ""
-ENV KAFKA_SECRET ""
+ENV KAFKA_PASSWORD ""
 ENV DATA_DIR "/var/opt/ori_data/id"
 
 VOLUME /var/opt/ori_data/id
