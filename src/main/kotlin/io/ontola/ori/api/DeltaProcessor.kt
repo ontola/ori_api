@@ -20,7 +20,7 @@ package io.ontola.ori.api
 
 import java.io.*
 import java.util.*
-
+import kotlinx.coroutines.*
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.eclipse.rdf4j.model.BNode
 import org.eclipse.rdf4j.model.Model
@@ -35,14 +35,12 @@ import java.util.ArrayList
 class DeltaProcessor(
     private val record: ConsumerRecord<String, String>,
     private val config: Properties
-) : Runnable {
+) {
 
-    override fun run() {
-        printlnWithThread("Started thread")
-        val baseDocument = config.getProperty("ori.api.baseIRI")
-
+    fun process() {
         try {
-            this.printlnWithThread("[start][orid:%s] Processing message", record.timestamp())
+            printlnWithThread("[start][orid:${record.timestamp()}] Processing message")
+            val baseDocument = config.getProperty("ori.api.baseIRI")
             val rdfParser = Rio.createParser(RDFFormat.NQUADS)
             val deltaEvent = LinkedHashModel()
             rdfParser.setRDFHandler(StatementCollector(deltaEvent))
@@ -50,8 +48,13 @@ class DeltaProcessor(
             try {
                 StringReader(record.value()).use {
                     rdfParser.parse(it, baseDocument)
-                    partitionDelta(deltaEvent)
-                        .forEach(DeltaEvent::process)
+                    runBlocking {
+                        for (delta in partitionDelta(deltaEvent)) {
+                            launch {
+                                delta.process()
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 printlnWithThread("Exception while parsing delta event: '%s'\n", e.toString())

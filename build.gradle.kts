@@ -29,6 +29,7 @@ dependencies {
     implementation("org.apache.logging.log4j:log4j-core:2.11.2")
     implementation("org.apache.logging.log4j:log4j-slf4j-impl:2.11.2")
     implementation("org.zeroturnaround:zt-zip:1.13")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.0-M1")
 
     implementation("org.eclipse.rdf4j:rdf4j-runtime:2.5.2") {
         exclude(group = "ch.qos.logback", module = "logback-classic")

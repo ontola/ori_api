@@ -17,7 +17,9 @@
  */
 package io.ontola.ori.api
 
-import org.apache.kafka.clients.consumer.ConsumerRecords
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.*
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.PartitionInfo
@@ -27,8 +29,6 @@ import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 import java.time.Duration
 import java.util.*
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
 import java.util.stream.Collectors
 
 /**
@@ -37,37 +37,39 @@ import java.util.stream.Collectors
  * TODO: Add activity streams to allow viewing which resources have changed
  * TODO: Add error handling service
  */
-fun main() {
+@ExperimentalCoroutinesApi
+fun main() = runBlocking {
     val config = initConfig()
     printInitMessage(config)
 
     ensureOutputFolder(config)
-
-    val threadCount = Integer.parseInt(System.getenv("THREAD_COUNT") ?: "1")
-    val s = Executors.newFixedThreadPool(threadCount)
-    val tasks = ArrayList<Future<*>>()
-
-    var interrupted = false
-    Runtime.getRuntime().addShutdownHook(Thread {
-        s.shutdown()
-        tasks.forEach { t -> t.cancel(true) }
-        interrupted = true
-    })
+    val threadCount = Integer.parseInt(System.getenv("THREAD_COUNT") ?: "4")
 
     try {
         val consumer = oriDeltaSubscriber(config)
+        val records = produceRecords(consumer)
 
-        while (!interrupted) {
-            val records: ConsumerRecords<String, String> = consumer.poll(Duration.ofMillis(100))
-            for (record in records) {
-                val p = DeltaProcessor(record, config)
-                tasks.add(s.submit(p))
-            }
-        }
+        repeat(threadCount) { consumeRecords(config, records) }
     } catch (e: Exception) {
         println("Fatal error occurred: ${e.message}")
         e.printStackTrace()
         System.exit(1)
+    }
+}
+
+@ExperimentalCoroutinesApi
+fun CoroutineScope.produceRecords(consumer: KafkaConsumer<String, String>): ReceiveChannel<ConsumerRecord<String, String>> = produce {
+    while (true) {
+        for (record in consumer.poll(Duration.ofMillis(0))) {
+            send(record)
+            delay(100)
+        }
+    }
+}
+
+fun CoroutineScope.consumeRecords(config: Properties, channel: ReceiveChannel<ConsumerRecord<String, String>>) = launch {
+    for (record in channel) {
+        DeltaProcessor(record, config).process()
     }
 }
 
