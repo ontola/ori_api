@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 package io.ontola.ori.api
 
 import kotlinx.coroutines.*
@@ -39,17 +40,19 @@ import java.util.stream.Collectors
  */
 @ExperimentalCoroutinesApi
 fun main() = runBlocking {
-    val config = initConfig()
-    printInitMessage(config)
+    val ctx = ORIContext.getCtx()
+    initConfig(ctx)
+    initKafkaConfig(ctx)
+    printInitMessage(ctx.config)
 
-    ensureOutputFolder(config)
+    ensureOutputFolder(ctx.config)
     val threadCount = Integer.parseInt(System.getenv("THREAD_COUNT") ?: "4")
 
     try {
-        val consumer = oriDeltaSubscriber(config)
+        val consumer = oriDeltaSubscriber()
         val records = produceRecords(consumer)
 
-        repeat(threadCount) { consumeRecords(config, records) }
+        repeat(threadCount) { consumeRecords(records) }
     } catch (e: Exception) {
         println("Fatal error occurred: ${e.message}")
         e.printStackTrace()
@@ -58,18 +61,19 @@ fun main() = runBlocking {
 }
 
 @ExperimentalCoroutinesApi
-fun CoroutineScope.produceRecords(consumer: KafkaConsumer<String, String>): ReceiveChannel<ConsumerRecord<String, String>> = produce {
-    while (true) {
-        for (record in consumer.poll(Duration.ofMillis(0))) {
-            send(record)
-            delay(100)
+fun CoroutineScope.produceRecords(consumer: KafkaConsumer<String, String>): ReceiveChannel<ConsumerRecord<String, String>> =
+    produce {
+        while (true) {
+            for (record in consumer.poll(Duration.ofMillis(0))) {
+                send(record)
+                delay(100)
+            }
         }
     }
-}
 
-fun CoroutineScope.consumeRecords(config: Properties, channel: ReceiveChannel<ConsumerRecord<String, String>>) = launch {
+fun CoroutineScope.consumeRecords(channel: ReceiveChannel<ConsumerRecord<String, String>>) = launch {
     for (record in channel) {
-        DeltaProcessor(record, config).process()
+        DeltaProcessor(record).process()
     }
 }
 
@@ -92,98 +96,19 @@ fun printInitMessage(p: Properties) {
     println("================================================")
 }
 
-fun initConfig(): Properties {
-    val config = Properties()
-
-    config.setProperty(
-        "ori.api.dataDir",
-        (System.getenv("DATA_DIR") ?: "${System.getProperty("java.io.tmpdir")}/id")
-    )
-    config.setProperty(
-        "ori.api.baseIRI",
-        (System.getenv("BASE_IRI") ?: "https://id.openraadsinformatie.nl")
-    )
-    config.setProperty(
-        "ori.api.supplantIRI",
-        (System.getenv("SUPPLANT_IRI") ?: "http://purl.org/link-lib/supplant")
-    )
-    config.setProperty(
-        "ori.api.kafka.clusterApiKey",
-        (System.getenv("KAFKA_USERNAME") ?: "")
-    )
-    config.setProperty(
-        "ori.api.kafka.clusterApiSecret",
-        (System.getenv("KAFKA_PASSWORD") ?: "")
-    )
-    config.setProperty(
-        "ori.api.kafka.group_id",
-        (System.getenv("KAFKA_GROUP_ID") ?: "ori_api")
-    )
-    config.setProperty(
-        "ori.api.kafka.hostname",
-        (System.getenv("KAFKA_HOSTNAME") ?: "localhost")
-    )
-    config.setProperty(
-        "ori.api.kafka.port",
-        (System.getenv("KAFKA_PORT") ?: "9092")
-    )
-    config.setProperty(
-        "ori.api.kafka.address",
-        (System.getenv("KAFKA_ADDRESS") ?: "")
-    )
-    config.setProperty(
-        "ori.api.kafka.topic",
-        (System.getenv("DELTA_TOPIC") ?: "ori-delta")
-    )
-    val hostname = config.getProperty("ori.api.kafka.hostname")
-    val port = config.getProperty("ori.api.kafka.port")
-    var address = config.getProperty("ori.api.kafka.address")
-    if (address == null || address.isEmpty()) {
-        address = "$hostname:$port"
-    }
-    config.setProperty("ori.api.kafka.address", address)
-
-    return config
-}
-
-fun oriDeltaSubscriber(config: Properties): KafkaConsumer<String, String> {
-    val kafkaOpts = Properties()
-    kafkaOpts.setProperty("bootstrap.servers", config.getProperty("ori.api.kafka.address"))
-    kafkaOpts.setProperty("group.id", config.getProperty("ori.api.kafka.group_id"))
-    kafkaOpts.setProperty("enable.auto.commit", "true")
-    kafkaOpts.setProperty("auto.commit.interval.ms", "1000")
-    kafkaOpts.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-    kafkaOpts.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-    kafkaOpts.setProperty("request.timeout.ms", "20000")
-    kafkaOpts.setProperty("retry.backoff.ms", "500")
-
-    val clusterApiKey = config.getProperty("ori.api.kafka.clusterApiKey")
-    val clusterApiSecret = config.getProperty("ori.api.kafka.clusterApiSecret")
-    if (clusterApiKey == null || "".equals(clusterApiKey) || clusterApiSecret == null || "".equals(clusterApiSecret)) {
-        println("Either cluster API key or secret was left blank, skipping SASL authentication")
-    } else {
-        kafkaOpts.setProperty("ssl.endpoint.identification.algorithm", "https")
-        kafkaOpts.setProperty("sasl.mechanism", "PLAIN")
-        val jaasConfig = String.format(
-            "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
-            clusterApiKey,
-            clusterApiSecret
-        )
-        kafkaOpts.setProperty("sasl.jaas.config", jaasConfig)
-        kafkaOpts.setProperty("security.protocol", "SASL_SSL")
-    }
-
-    val topic = config.getProperty("ori.api.kafka.topic", "ori-delta")
+fun oriDeltaSubscriber(): KafkaConsumer<String, String> {
+    val ctx = ORIContext.getCtx()
+    val topic = ctx.config.getProperty("ori.api.kafka.topic", "ori-delta")
 
     System.out.printf(
         "Connecting to kafka on '%s' with group '%s' and topic '%s' \n",
-        kafkaOpts.getProperty("bootstrap.servers"),
-        kafkaOpts.getProperty("group.id"),
+        ctx.kafkaOpts.getProperty("bootstrap.servers"),
+        ctx.kafkaOpts.getProperty("group.id"),
         topic
     )
 
     try {
-        val consumer = KafkaConsumer<String, String>(kafkaOpts)
+        val consumer = KafkaConsumer<String, String>(ctx.kafkaOpts)
         consumer.subscribe(Arrays.asList(topic))
 
         val partitionList = consumer

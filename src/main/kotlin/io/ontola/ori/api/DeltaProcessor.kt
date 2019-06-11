@@ -31,11 +31,10 @@ import org.eclipse.rdf4j.rio.*
 import org.eclipse.rdf4j.rio.helpers.StatementCollector
 import java.util.ArrayList
 
-
 class DeltaProcessor(
-    private val record: ConsumerRecord<String, String>,
-    private val config: Properties
+    private val record: ConsumerRecord<String, String>
 ) {
+    private val config: Properties = ORIContext.getCtx().config
 
     fun process() {
         try {
@@ -108,7 +107,7 @@ class DeltaProcessor(
                         removals.add(key)
                     }
                 } else if (!forest.containsKey(key.stringValue())) {
-                    val store = DeltaEvent(key.stringValue(), config)
+                    val store = DeltaEvent(key.stringValue())
                     for (statement in value) {
                         if (statement.`object` is BNode) {
                             val nodeData = statement.getObject()

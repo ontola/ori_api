@@ -34,9 +34,9 @@ import java.util.Properties
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 
 class DeltaEvent(
-    val iri: String,
-    private val config: Properties
+    val iri: String
 ) {
+    private val config: Properties = ORIContext.getCtx().config
 
     companion object {
         private val digester: MessageDigest = getDigester()
