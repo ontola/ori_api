@@ -27,8 +27,6 @@ import org.eclipse.rdf4j.model.Model
 import org.eclipse.rdf4j.model.Resource
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory
 import org.eclipse.rdf4j.rio.*
-import org.eclipse.rdf4j.rio.helpers.JSONLDMode
-import org.eclipse.rdf4j.rio.helpers.JSONLDSettings
 import org.zeroturnaround.zip.ZipUtil
 import java.io.IOException
 import java.nio.file.Files
