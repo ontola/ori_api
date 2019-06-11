@@ -67,15 +67,16 @@ class Document(
     }
 
     private fun archive() {
+        val tmp = createTempFile("ori-api-$id-$version")
+        tmp.deleteOnExit()
+        ZipUtil.pack(filePath, tmp)
+
         val archiveName = "${this.id}.zip"
         val archive = File("$filePath/$archiveName")
         if (archive.exists()) {
             archive.delete()
         }
-        ZipUtil.pack(filePath, archive)
-        if (ZipUtil.containsEntry(archive, archiveName)) {
-            ZipUtil.removeEntry(archive, archiveName)
-        }
+        Files.move(tmp.toPath(), archive.toPath())
     }
 
     private fun ensureDirectory() {
