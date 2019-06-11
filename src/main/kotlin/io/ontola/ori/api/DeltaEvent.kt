@@ -80,14 +80,9 @@ class DeltaEvent(
     }
 
     fun process() {
-        System.out.printf("Processing deltaevent, %s\n", this.iri)
+        println("Processing deltaevent, $iri")
         ensureDirectoryTree()
-//    // TODO: create activity log for each incoming resource
-//    File streamsFile = new File(filePath + ".activity.json")
-//    if (!streamsFile.exists()) {
-//      // Create empty streamfile
-//      System.out.println("Resource has no activitystream")
-//    }
+        // TODO: create activity log for each incoming resource
         // Append create or update action to streamfile
         // Process model
         val versionStamp = SimpleDateFormat("yyyyMMdd'T'hhmm").format(Date())
@@ -108,12 +103,7 @@ class DeltaEvent(
                 newestVersion.dir().relativeTo(this.baseDir()).toPath()
             )
         } catch (e: IOException) {
-            System.out.printf(
-                "Error while marking '%s' as latest for resource '%s'; %s\n",
-                newestVersion.version,
-                this.iri,
-                e.message
-            )
+            println("Error while marking '${newestVersion.version}' as latest for resource '$iri'; ${e.message}")
         }
     }
 

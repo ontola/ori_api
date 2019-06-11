@@ -65,7 +65,7 @@ fun main() {
             }
         }
     } catch (e: Exception) {
-        System.out.println("Fatal error occurred: ${e.message}")
+        println("Fatal error occurred: ${e.message}")
         e.printStackTrace()
         System.exit(1)
     }
@@ -79,15 +79,15 @@ fun ensureOutputFolder(settings: Properties) {
 }
 
 fun printInitMessage(p: Properties) {
-    System.out.println("================================================")
-    System.out.printf("Starting ORI API\n\n")
+    println("================================================")
+    println("Starting ORI API\n")
     val keys = p.keys()
     while (keys.hasMoreElements()) {
         val key = keys.nextElement() as String
         val value = p.get(key)
-        System.out.println(key.substring("ori.api.".length) + ": " + value)
+        println(key.substring("ori.api.".length) + ": " + value)
     }
-    System.out.println("================================================")
+    println("================================================")
 }
 
 fun initConfig(): Properties {
@@ -158,7 +158,7 @@ fun oriDeltaSubscriber(config: Properties): KafkaConsumer<String, String> {
     val clusterApiKey = config.getProperty("ori.api.kafka.clusterApiKey")
     val clusterApiSecret = config.getProperty("ori.api.kafka.clusterApiSecret")
     if (clusterApiKey == null || "".equals(clusterApiKey) || clusterApiSecret == null || "".equals(clusterApiSecret)) {
-        System.out.println("Either cluster API key or secret was left blank, skipping SASL authentication")
+        println("Either cluster API key or secret was left blank, skipping SASL authentication")
     } else {
         kafkaOpts.setProperty("ssl.endpoint.identification.algorithm", "https")
         kafkaOpts.setProperty("sasl.mechanism", "PLAIN")
@@ -190,7 +190,7 @@ fun oriDeltaSubscriber(config: Properties): KafkaConsumer<String, String> {
             .map { t: PartitionInfo -> Integer.toString(t.partition()) }
             .collect(Collectors.joining(","))
 
-        System.out.printf("Subscribed to topic '%s' with partitions '%s'", topic, partitionList)
+        println("Subscribed to topic '$topic' with partitions '$partitionList'")
 
         return consumer
     } catch (e: KafkaException) {
@@ -209,7 +209,7 @@ fun getDigester(): MessageDigest {
     try {
         digester = MessageDigest.getInstance("MD5")
     } catch (e: NoSuchAlgorithmException) {
-        System.out.println("[FATAL] No MD5 MessageDigest algorithm support, exiting")
+        println("[FATAL] No MD5 MessageDigest algorithm support, exiting")
         System.exit(1)
     }
 

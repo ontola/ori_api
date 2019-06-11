@@ -54,13 +54,13 @@ class DeltaProcessor(
                         .forEach(DeltaEvent::process)
                 }
             } catch (e: Exception) {
-                this.printlnWithThread("Exception while parsing delta event: '%s'\n", e.toString())
+                printlnWithThread("Exception while parsing delta event: '%s'\n", e.toString())
                 e.printStackTrace()
             }
 
-            this.printlnWithThread("[end][orid:%s] Done with message\n", record.timestamp())
+            printlnWithThread("[end][orid:%s] Done with message\n", record.timestamp())
         } catch (e: Exception) {
-            this.printlnWithThread("Exception while processing delta event: '%s'\n", e.toString())
+            printlnWithThread("Exception while processing delta event: '%s'\n", e.toString())
             e.printStackTrace()
         }
     }

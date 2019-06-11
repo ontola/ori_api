@@ -59,7 +59,7 @@ class Document(
     }
 
     fun save() {
-        System.out.printf("Writing subject '%s' with version '%s'\n", this.subject, this.version)
+        println("Writing subject '$subject' with version '$version'")
 
         ensureDirectory()
         serialize()
@@ -108,9 +108,9 @@ class Document(
                 rdfWriter.endRDF()
                 Files.setPosixFilePermissions(file.toPath(), permissions)
             } catch (e: FileNotFoundException) {
-                System.out.printf("Couldn't create file '%s' because '%s' \n", file.path, e.toString())
+                println("Couldn't create file '${file.path}' because '$e'")
             } catch (e: RDF4JException) {
-                System.out.printf("Error while serializing resource '$id' because '%s' \n", file.path, e.toString())
+                println("Error while serializing resource '$id' to ${file.path} because '$e'")
             }
         }
     }
