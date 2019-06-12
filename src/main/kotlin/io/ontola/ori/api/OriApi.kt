@@ -32,6 +32,7 @@ import java.security.NoSuchAlgorithmException
 import java.time.Duration
 import java.util.*
 import java.util.stream.Collectors
+import kotlin.system.exitProcess
 
 /**
  * Listens to kafka streams and processes delta streams into the file system.
@@ -49,6 +50,11 @@ fun main(args: Array<String>) = runBlocking {
     ensureOutputFolder(ctx.config)
     val threadCount = Integer.parseInt(ctx.config.getProperty("ori.api.threadCount"))
 
+    if (args.isNotEmpty() && args[0] == "--clean-old-versions") {
+        cleanOldVersionsAsync().await()
+        exitProcess(0)
+    }
+
     try {
         val consumer = oriDeltaSubscriber()
         if (args.isNotEmpty() && args[0] == "--from-beginning") {
@@ -61,7 +67,7 @@ fun main(args: Array<String>) = runBlocking {
     } catch (e: Exception) {
         println("Fatal error occurred: ${e.message}")
         e.printStackTrace()
-        System.exit(1)
+        exitProcess(1)
     }
 }
 
@@ -122,7 +128,7 @@ fun oriDeltaSubscriber(): KafkaConsumer<String, String> {
             .map { t: PartitionInfo -> Integer.toString(t.partition()) }
             .collect(Collectors.joining(","))
 
-        while(consumer.assignment().size == 0) {
+        while (consumer.assignment().size == 0) {
             consumer.poll(Duration.ofMillis(100))
         }
 
