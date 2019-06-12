@@ -51,7 +51,7 @@ class DeltaEvent(
 
         val md5sum = digester.digest(id.toByteArray())
         val hashedId = String.format("%032x", BigInteger(1, md5sum))
-        hashKeys = Splitter.fixedLength(2).split(hashedId)
+        hashKeys = Splitter.fixedLength(4).split(hashedId)
     }
 
     private fun baseDir(): File {
