@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.PartitionInfo
+import org.apache.kafka.common.TopicPartition
 import java.io.File
 import java.lang.Exception
 import java.security.MessageDigest
@@ -39,17 +40,21 @@ import java.util.stream.Collectors
  * TODO: Add error handling service
  */
 @ExperimentalCoroutinesApi
-fun main() = runBlocking {
+fun main(args: Array<String>) = runBlocking {
     val ctx = ORIContext.getCtx()
     initConfig(ctx)
     initKafkaConfig(ctx)
     printInitMessage(ctx.config)
 
     ensureOutputFolder(ctx.config)
-    val threadCount = Integer.parseInt(System.getenv("THREAD_COUNT") ?: "4")
+    val threadCount = Integer.parseInt(ctx.config.getProperty("ori.api.threadCount"))
 
     try {
         val consumer = oriDeltaSubscriber()
+        if (args.isNotEmpty() && args[0] == "--from-beginning") {
+            resetTopicToBeginning(consumer)
+        }
+
         val records = produceRecords(consumer)
 
         repeat(threadCount) { consumeRecords(records) }
@@ -117,7 +122,12 @@ fun oriDeltaSubscriber(): KafkaConsumer<String, String> {
             .map { t: PartitionInfo -> Integer.toString(t.partition()) }
             .collect(Collectors.joining(","))
 
+        while(consumer.assignment().size == 0) {
+            consumer.poll(Duration.ofMillis(100))
+        }
+
         println("Subscribed to topic '$topic' with partitions '$partitionList'")
+
 
         return consumer
     } catch (e: KafkaException) {
@@ -141,4 +151,12 @@ fun getDigester(): MessageDigest {
     }
 
     return digester as MessageDigest
+}
+
+fun resetTopicToBeginning(consumer: KafkaConsumer<String, String>) {
+    val parts = consumer
+        .partitionsFor(ORIContext.getCtx().config.getProperty("ori.api.kafka.topic", "ori-delta"))
+        .map { t -> TopicPartition(t.topic(), t.partition()) }
+    consumer.seekToBeginning(parts)
+    consumer.commitSync()
 }

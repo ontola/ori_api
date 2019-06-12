@@ -60,6 +60,10 @@ fun initConfig(ctx: ORIContext) {
         "ori.api.kafka.topic",
         (System.getenv("DELTA_TOPIC") ?: "ori-delta")
     )
+    config.setProperty(
+        "ori.api.threadCount",
+        System.getenv("THREAD_COUNT") ?: "4"
+    )
     val hostname = config.getProperty("ori.api.kafka.hostname")
     val port = config.getProperty("ori.api.kafka.port")
     var address = config.getProperty("ori.api.kafka.address")
