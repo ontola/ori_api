@@ -17,7 +17,8 @@ suspend fun cleanOldVersionsAsync() = GlobalScope.async {
 }
 
 fun processDir(dir: Path) {
-    val isVersionDir = Regex("\\d{8}T\\d{4}")
+    val isVersionDir = DeltaEvent.verionStringMatcher
+
     dir
         .toFile()
         .walk()

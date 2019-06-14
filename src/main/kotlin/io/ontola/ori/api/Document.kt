@@ -18,15 +18,20 @@
 
 package io.ontola.ori.api
 
+import com.github.jsonldjava.core.RDFDataset
 import org.eclipse.rdf4j.RDF4JException
+import org.eclipse.rdf4j.model.IRI
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 
 import org.eclipse.rdf4j.model.Model
 import org.eclipse.rdf4j.model.Resource
+import org.eclipse.rdf4j.model.impl.LinkedHashModel
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory
+import org.eclipse.rdf4j.model.util.Models
 import org.eclipse.rdf4j.rio.*
+import org.eclipse.rdf4j.rio.helpers.StatementCollector
 import org.zeroturnaround.zip.ZipUtil
 import java.io.IOException
 import java.nio.file.Files
@@ -41,6 +46,13 @@ class Document(
     val version: String,
     private val baseDir: File
 ) {
+    companion object {
+        fun findExisting(iri: String, timestamp: String, baseDir: File): Document {
+            val d = Document(iri, LinkedHashModel(), timestamp, baseDir)
+            d.read()
+            return d
+        }
+    }
 
     private val id: String = this.iri.substring(this.iri.lastIndexOf('/') + 1)
     private val subject: Resource = SimpleValueFactory.getInstance().createIRI(iri)
@@ -54,9 +66,18 @@ class Document(
         RDFFormat.RDFJSON
     )
 
+    val organization: IRI?
+        get() {
+            val hasOrgName = RDFDataset.IRI("http://www.w3.org/2006/vcard/ns#hasOrganizationName")
+            return data
+                .find { s -> s.predicate == hasOrgName }
+                ?.`object` as IRI?
+        }
+
     fun dir(): File {
         return File(String.format("%s/%s", baseDir.absolutePath, this.version))
     }
+
 
     fun save() {
         println("Writing subject '$subject' with version '$version'")
@@ -94,6 +115,21 @@ class Document(
         }
     }
 
+    /**
+     * Reads an existing (n-quads) file from disk into the model, overwriting any previous statements.
+     */
+    private fun read() {
+        val newData = LinkedHashModel()
+        val rdfParser = Rio.createParser(RDFFormat.NQUADS)
+        val nqFile = File("$baseDir/$version/$id.nq")
+
+        rdfParser.setRDFHandler(StatementCollector(newData))
+        rdfParser.parse(nqFile.inputStream(), iri)
+
+        data.clear()
+        data.addAll(newData)
+    }
+
     private fun serialize() {
         val permissions = PosixFilePermissions.fromString("rw-r--r--")
         for (format in formats) {
@@ -101,11 +137,8 @@ class Document(
             val file = File("$filePath/$filename")
 
             try {
-                val rdfWriter = createWriter(format, FileOutputStream(file))
-                rdfWriter.handleUsedNamespaces(this.data)
-                rdfWriter.startRDF()
-                rdfWriter.handleModel(this.data)
-                rdfWriter.endRDF()
+                val rdfWriter = ORio.createWriter(format, FileOutputStream(file))
+                rdfWriter.handleSingleModel(this.data)
                 Files.setPosixFilePermissions(file.toPath(), permissions)
             } catch (e: FileNotFoundException) {
                 println("Couldn't create file '${file.path}' because '$e'")
@@ -115,11 +148,20 @@ class Document(
         }
     }
 
+    /**
+     * Compares two documents by their contents.
+     *
+     * Will return true even if the versions differ, but the IRI and statements are equal.
+     */
     override operator fun equals(other: Any?): Boolean {
         if (other == null || this.javaClass != other.javaClass) {
             return false
         }
 
-        return iri == (other as Document).iri
+        return iri == (other as Document).iri && Models.isomorphic(data, other.data)
+    }
+
+    override fun hashCode(): Int {
+        return "${iri.hashCode()}${data.hashCode()}".hashCode()
     }
 }

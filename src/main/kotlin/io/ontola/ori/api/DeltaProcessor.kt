@@ -80,7 +80,6 @@ class DeltaProcessor(
      */
     private fun partitionDelta(deltaEvent: Model): MutableCollection<DeltaEvent> {
         val partitions = HashMap<Resource, List<Statement>>()
-
         // TODO: implement an RDFHandler which does this while parsing
         for (s: Statement in deltaEvent) {
             if (!s.context?.toString().equals(config.getProperty("ori.api.supplantIRI"))) {
@@ -102,10 +101,14 @@ class DeltaProcessor(
             for ((key, value) in partitions) {
                 if (key is BNode) {
                     val delta = forest.values.find { event -> event.anyObject(key) }
-                    if (delta != null) {
-                        value.forEach { stmt -> delta.deltaAdd(stmt) }
+                    if (delta == null) {
                         removals.add(key)
+                        val danglingResource = LinkedHashModel(deltaEvent.filter { s -> s.subject == key })
+                        EventBus.getBus().publishError("dangling-resource", danglingResource, null)
+                        continue
                     }
+                    value.forEach { stmt -> delta.deltaAdd(stmt) }
+                    removals.add(key)
                 } else if (!forest.containsKey(key.stringValue())) {
                     val store = DeltaEvent(key.stringValue())
                     for (statement in value) {

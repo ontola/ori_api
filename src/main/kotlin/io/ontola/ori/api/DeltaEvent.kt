@@ -19,7 +19,6 @@
 package io.ontola.ori.api
 
 import com.google.common.base.Splitter
-import org.eclipse.rdf4j.model.*
 
 import java.io.File
 import java.io.IOException
@@ -31,6 +30,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Properties
 
+import org.eclipse.rdf4j.model.*
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 
 class DeltaEvent(
@@ -39,6 +39,7 @@ class DeltaEvent(
     private val config: Properties = ORIContext.getCtx().config
 
     companion object {
+        val verionStringMatcher = Regex("\\d{8}T\\d{4}")
         private val digester: MessageDigest = getDigester()
     }
 
@@ -70,41 +71,32 @@ class DeltaEvent(
         return delta.any { stmt -> stmt.`object` == o }
     }
 
-    fun findLatestDocument(): String {
-        val timestampMatcher = Regex("[0-9]{6}")
-
-        return baseDir()
-            .list { dir: File, name: String -> dir.isDirectory() && name.matches(timestampMatcher) }
-            .sortedArray()
-            .first()
-    }
-
     fun process() {
         println("Processing deltaevent, $iri")
         ensureDirectoryTree()
-        // TODO: create activity log for each incoming resource
-        // Append create or update action to streamfile
-        // Process model
+        val latestVersion = findLatestDocument()
+        val newVersion = initNewVersion()
+
+        val event = when {
+            latestVersion == null -> "create"
+            latestVersion != newVersion -> "update"
+            else -> return
+        }
+
+        newVersion.save()
+        updateLatest(newVersion)
+        publishBlocking(event, newVersion)
+    }
+
+    private fun initNewVersion(): Document {
         val versionStamp = SimpleDateFormat("yyyyMMdd'T'hhmm").format(Date())
-        val newestVersion = Document(
+
+        return Document(
             this.iri,
             this.delta,
             versionStamp,
             this.baseDir()
         )
-        newestVersion.save()
-
-        try {
-            val latestDir = File(String.format("%s/%s", this.baseDir(), "latest"))
-            Files.deleteIfExists(latestDir.toPath())
-            // The link needs to be relative to work across volume mounts
-            Files.createSymbolicLink(
-                latestDir.toPath(),
-                newestVersion.dir().relativeTo(this.baseDir()).toPath()
-            )
-        } catch (e: IOException) {
-            println("Error while marking '${newestVersion.version}' as latest for resource '$iri'; ${e.message}")
-        }
     }
 
     private fun ensureDirectoryTree() {
@@ -122,11 +114,52 @@ class DeltaEvent(
         }
     }
 
+    private fun findLatestDocument(): Document? {
+        val timestampMatcher = verionStringMatcher
+
+        val version = baseDir()
+            .list { dir: File, name: String -> dir.isDirectory && name.matches(timestampMatcher) }
+            .sortedArray()
+            .lastOrNull()
+
+        if (version.isNullOrEmpty()) {
+            return null
+        }
+
+        return Document.findExisting(iri, version, baseDir())
+    }
+
+    /** Publish an action to the bus for further processing */
+    private fun publishBlocking(type: String, version: Document) {
+        EventBus
+            .getBus()
+            .publishEvent(type, iri, version.organization)
+            .get()
+    }
+
+    private fun updateLatest(nextLatest: Document) {
+        try {
+            val latestDir = File(String.format("%s/%s", this.baseDir(), "latest"))
+            Files.deleteIfExists(latestDir.toPath())
+            // The link needs to be relative to work across volume mounts
+            Files.createSymbolicLink(
+                latestDir.toPath(),
+                nextLatest.dir().relativeTo(this.baseDir()).toPath()
+            )
+        } catch (e: IOException) {
+            println("Error while marking '${nextLatest.version}' as latest for resource '$iri'; ${e.message}")
+        }
+    }
+
     override operator fun equals(other: Any?): Boolean {
         if (other == null || this.javaClass != other.javaClass) {
             return false
         }
 
         return iri == (other as DeltaEvent).iri
+    }
+
+    override fun hashCode(): Int {
+        return iri.hashCode()
     }
 }

@@ -35,6 +35,8 @@ dependencies {
         exclude(group = "ch.qos.logback", module = "logback-classic")
     }
     implementation("org.eclipse.rdf4j:rdf4j-rio:2.5.2")
+    // Fixes undefined HexBinaryAdapter in org.eclipse.rdf4j.rio.helpers::AbstractRDFParser
+    implementation("javax.xml.bind:jaxb-api:2.3.0")
 
     implementation(kotlin("stdlib-jdk8"))
 

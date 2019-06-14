@@ -18,8 +18,11 @@
 
 package io.ontola.ori.api
 
-fun initConfig(ctx: ORIContext) {
-    val config = ctx.config
+import java.util.*
+
+fun initConfig(): Properties {
+    val config = Properties()
+
     config.setProperty(
         "ori.api.dataDir",
         (System.getenv("DATA_DIR") ?: "${System.getProperty("java.io.tmpdir")}/id")
@@ -61,6 +64,14 @@ fun initConfig(ctx: ORIContext) {
         (System.getenv("DELTA_TOPIC") ?: "ori-delta")
     )
     config.setProperty(
+        "ori.api.kafka.updateTopic",
+        (System.getenv("API_UPDATE_TOPIC") ?: "ori-api-update")
+    )
+    config.setProperty(
+        "ori.api.kafka.errorTopic",
+        (System.getenv("API_ERROR_TOPIC") ?: "ori-api-error")
+    )
+    config.setProperty(
         "ori.api.threadCount",
         System.getenv("THREAD_COUNT") ?: "4"
     )
@@ -71,11 +82,12 @@ fun initConfig(ctx: ORIContext) {
         address = "$hostname:$port"
     }
     config.setProperty("ori.api.kafka.address", address)
+
+    return config
 }
 
-fun initKafkaConfig(ctx: ORIContext) {
-    val config = ctx.config
-    val kafkaOpts = ctx.kafkaOpts
+fun initKafkaConfig(config: Properties): Properties {
+    val kafkaOpts = Properties()
 
     kafkaOpts.setProperty("bootstrap.servers", config.getProperty("ori.api.kafka.address"))
     kafkaOpts.setProperty("group.id", config.getProperty("ori.api.kafka.group_id"))
@@ -83,6 +95,8 @@ fun initKafkaConfig(ctx: ORIContext) {
     kafkaOpts.setProperty("auto.commit.interval.ms", "1000")
     kafkaOpts.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     kafkaOpts.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    kafkaOpts.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
+    kafkaOpts.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
     kafkaOpts.setProperty("request.timeout.ms", "20000")
     kafkaOpts.setProperty("retry.backoff.ms", "500")
 
@@ -101,4 +115,6 @@ fun initKafkaConfig(ctx: ORIContext) {
         kafkaOpts.setProperty("sasl.jaas.config", jaasConfig)
         kafkaOpts.setProperty("security.protocol", "SASL_SSL")
     }
+
+    return kafkaOpts
 }

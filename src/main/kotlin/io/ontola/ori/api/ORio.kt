@@ -27,15 +27,7 @@ import org.eclipse.rdf4j.rio.helpers.BasicWriterSettings
 import org.eclipse.rdf4j.rio.helpers.JSONLDMode
 import org.eclipse.rdf4j.rio.helpers.JSONLDSettings
 import java.io.OutputStream
-
-fun createWriter(
-    format: RDFFormat,
-    out: OutputStream
-): ORio {
-    val rdfWriter = Rio.createWriter(format, out)
-
-    return ORio(rdfWriter)
-}
+import java.io.Writer
 
 /**
  * Rio wrapper to only include namespaces mentioned in the data.
@@ -73,6 +65,13 @@ class ORio(private val writer: RDFWriter) : RDFWriter by writer {
         usedNamespaces.forEach { ns -> writer.handleNamespace(reverseNamespaces[ns], ns) }
     }
 
+    fun handleSingleModel(model: Model) {
+        handleUsedNamespaces(model)
+        startRDF()
+        handleModel(model)
+        endRDF()
+    }
+
     fun handleModel(model: Model) {
         model
             .stream()
@@ -81,7 +80,19 @@ class ORio(private val writer: RDFWriter) : RDFWriter by writer {
     }
 
     companion object {
-        fun reverseNSMap(): Map<String, String> {
+        fun createWriter(format: RDFFormat, out: OutputStream): ORio {
+            val rdfWriter = Rio.createWriter(format, out)
+
+            return ORio(rdfWriter)
+        }
+
+        fun createWriter(format: RDFFormat, writer: Writer): ORio {
+            val rdfWriter = Rio.createWriter(format, writer)
+
+            return ORio(rdfWriter)
+        }
+
+        private fun reverseNSMap(): Map<String, String> {
             val nsMap = HashMap<String, String>()
 
             nsMap["https://argu.co/ns/meta#"] = "ameta"

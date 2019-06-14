@@ -22,16 +22,12 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.*
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.PartitionInfo
-import org.apache.kafka.common.TopicPartition
 import java.io.File
 import java.lang.Exception
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 import java.time.Duration
 import java.util.*
-import java.util.stream.Collectors
 import kotlin.system.exitProcess
 
 /**
@@ -43,8 +39,7 @@ import kotlin.system.exitProcess
 @ExperimentalCoroutinesApi
 fun main(args: Array<String>) = runBlocking {
     val ctx = ORIContext.getCtx()
-    initConfig(ctx)
-    initKafkaConfig(ctx)
+
     printInitMessage(ctx.config)
 
     ensureOutputFolder(ctx.config)
@@ -56,9 +51,9 @@ fun main(args: Array<String>) = runBlocking {
     }
 
     try {
-        val consumer = oriDeltaSubscriber()
+        val consumer = EventBus.getBus().createSubscriber()
         if (args.isNotEmpty() && args[0] == "--from-beginning") {
-            resetTopicToBeginning(consumer)
+            EventBus.getBus().resetTopicToBeginning(consumer)
         }
 
         val records = produceRecords(consumer)
@@ -84,7 +79,7 @@ fun CoroutineScope.produceRecords(consumer: KafkaConsumer<String, String>): Rece
 
 fun CoroutineScope.consumeRecords(channel: ReceiveChannel<ConsumerRecord<String, String>>) = launch {
     for (record in channel) {
-        DeltaProcessor(record).process()
+        launch { DeltaProcessor(record).process() }
     }
 }
 
@@ -107,42 +102,6 @@ fun printInitMessage(p: Properties) {
     println("================================================")
 }
 
-fun oriDeltaSubscriber(): KafkaConsumer<String, String> {
-    val ctx = ORIContext.getCtx()
-    val topic = ctx.config.getProperty("ori.api.kafka.topic", "ori-delta")
-
-    System.out.printf(
-        "Connecting to kafka on '%s' with group '%s' and topic '%s' \n",
-        ctx.kafkaOpts.getProperty("bootstrap.servers"),
-        ctx.kafkaOpts.getProperty("group.id"),
-        topic
-    )
-
-    try {
-        val consumer = KafkaConsumer<String, String>(ctx.kafkaOpts)
-        consumer.subscribe(Arrays.asList(topic))
-
-        val partitionList = consumer
-            .partitionsFor(topic)
-            .stream()
-            .map { t: PartitionInfo -> Integer.toString(t.partition()) }
-            .collect(Collectors.joining(","))
-
-        while (consumer.assignment().size == 0) {
-            consumer.poll(Duration.ofMillis(100))
-        }
-
-        println("Subscribed to topic '$topic' with partitions '$partitionList'")
-
-
-        return consumer
-    } catch (e: KafkaException) {
-        val c: Throwable? = e.cause
-        val message = (c ?: e).message
-        throw Exception("[FATAL] Error while creating subscriber: $message\n", e)
-    }
-}
-
 /**
  * Hard check for an MD5 digester.
  * No fallback is used since that could cause inconsistent results when multiple hash methods are mixed.
@@ -157,12 +116,4 @@ fun getDigester(): MessageDigest {
     }
 
     return digester as MessageDigest
-}
-
-fun resetTopicToBeginning(consumer: KafkaConsumer<String, String>) {
-    val parts = consumer
-        .partitionsFor(ORIContext.getCtx().config.getProperty("ori.api.kafka.topic", "ori-delta"))
-        .map { t -> TopicPartition(t.topic(), t.partition()) }
-    consumer.seekToBeginning(parts)
-    consumer.commitSync()
 }

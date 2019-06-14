@@ -22,12 +22,18 @@ import java.util.*
 
 /**
  * Global store for configuration used across the application. Prevents passing around the same object everywhere.
- *
- * @see {config.kt}
  */
-data class ORIContext(val config: Properties, val kafkaOpts: Properties) {
+data class ORIContext(
+    internal val config: Properties,
+    internal val kafkaOpts: Properties
+) {
     companion object {
-        private val context = ORIContext(Properties(), Properties())
+        private val context: ORIContext
+
+        init {
+            val config = initConfig()
+            context = ORIContext(config, initKafkaConfig(config))
+        }
 
         fun getCtx(): ORIContext {
             return context
