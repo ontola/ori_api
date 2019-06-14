@@ -63,7 +63,9 @@ class Document(
         RDFFormat.NQUADS,
         RDFFormat.TURTLE,
         RDFFormat.JSONLD,
-        RDFFormat.RDFJSON
+        RDFFormat.RDFJSON,
+        RDFFormat.BINARY,
+        RDFFormat.RDFXML
     )
 
     val organization: IRI?
