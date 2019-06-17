@@ -41,20 +41,22 @@ import java.nio.file.attribute.PosixFilePermissions
  * A resource in the ORI API.
  */
 class Document(
-    private val iri: String,
+    private val docCtx: DocumentCtx,
     private val data: Model,
-    val version: String,
     private val baseDir: File
 ) {
     companion object {
-        fun findExisting(iri: String, timestamp: String, baseDir: File): Document {
-            val d = Document(iri, LinkedHashModel(), timestamp, baseDir)
+        fun findExisting(docCtx: DocumentCtx, timestamp: String, baseDir: File): Document {
+            val d = Document(docCtx.copy(version = timestamp), LinkedHashModel(), baseDir)
             d.read()
             return d
         }
     }
 
-    private val id: String = this.iri.substring(this.iri.lastIndexOf('/') + 1)
+    private val iri = docCtx.iri!!
+    internal val version = docCtx.version!!
+
+    private val id: String = iri.substring(iri.lastIndexOf('/') + 1)
     private val subject: Resource = SimpleValueFactory.getInstance().createIRI(iri)
     private val filePath = this.dir()
     private val formats = listOf(
@@ -77,7 +79,7 @@ class Document(
         }
 
     fun dir(): File {
-        return File(String.format("%s/%s", baseDir.absolutePath, this.version))
+        return File(String.format("%s/%s", baseDir.absolutePath, version))
     }
 
 
@@ -112,7 +114,8 @@ class Document(
                     PosixFilePermissions.asFileAttribute(dirPerms)
                 )
             } catch (e: IOException) {
-                throw Exception(String.format("Couldn't create directory '%s'", filePath), e)
+                val dirException = Exception(String.format("Couldn't create directory '%s'", filePath), e)
+                EventBus.getBus().publishError(docCtx, dirException)
             }
         }
     }
@@ -143,9 +146,12 @@ class Document(
                 rdfWriter.handleSingleModel(this.data)
                 Files.setPosixFilePermissions(file.toPath(), permissions)
             } catch (e: FileNotFoundException) {
-                println("Couldn't create file '${file.path}' because '$e'")
+                EventBus.getBus().publishError(docCtx, Exception("Couldn't create file '${file.path}' because '$e'", e))
             } catch (e: RDF4JException) {
-                println("Error while serializing resource '$id' to ${file.path} because '$e'")
+                EventBus.getBus().publishError(
+                    docCtx,
+                    Exception("Error while serializing resource '$id' to ${file.path} because '$e'", e)
+                )
             }
         }
     }

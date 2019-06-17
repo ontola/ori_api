@@ -28,7 +28,7 @@ import java.time.Duration
 import kotlin.system.exitProcess
 
 @ExperimentalCoroutinesApi
-fun processDeltas(fromBeginning: Boolean) = runBlocking {
+fun processDeltas(docCtx: DocumentCtx, fromBeginning: Boolean) = runBlocking {
     val ctx = ORIContext.getCtx()
     val threadCount = Integer.parseInt(ctx.config.getProperty("ori.api.threadCount"))
     try {
@@ -39,7 +39,7 @@ fun processDeltas(fromBeginning: Boolean) = runBlocking {
 
         val records = produceDeltas(consumer)
 
-        repeat(threadCount) { consumeDeltas(records) }
+        repeat(threadCount) { consumeDeltas(docCtx, records) }
     } catch (e: Exception) {
         println("Fatal error occurred: ${e.message}")
         e.printStackTrace()
@@ -58,8 +58,9 @@ private fun CoroutineScope.produceDeltas(consumer: KafkaConsumer<String, String>
         }
     }
 
-private fun CoroutineScope.consumeDeltas(channel: ReceiveChannel<ConsumerRecord<String, String>>) = launch {
-    for (record in channel) {
-        launch { DeltaProcessor(record).process() }
+private fun CoroutineScope.consumeDeltas(docCtx: DocumentCtx, channel: ReceiveChannel<ConsumerRecord<String, String>>) =
+    launch {
+        for (record in channel) {
+            launch { DeltaProcessor(docCtx.copy(record = record)).process() }
+        }
     }
-}

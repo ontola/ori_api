@@ -32,18 +32,27 @@ import kotlin.system.exitProcess
  * TODO: Add error handling service
  */
 @ExperimentalCoroutinesApi
-fun main(args: Array<String>) = runBlocking {
+fun main(args: Array<String>) = runBlocking<Unit> {
     val ctx = ORIContext.getCtx()
 
     printInitMessage(ctx.config)
 
     ensureOutputFolder(ctx.config)
 
-    if (args.isNotEmpty() && args[0] == "--clean-old-versions") {
-        cleanOldVersionsAsync().await()
-        exitProcess(0)
-    } else {
-        processDeltas(args.isNotEmpty() && args[0] == "--from-beginning")
+    var primaryFlag = ""
+    if (args.isNotEmpty()) {
+        primaryFlag = args[0]
+    }
+
+    when(primaryFlag) {
+        "--clean-old-versions" -> {
+            cleanOldVersionsAsync().await()
+            exitProcess(0)
+        }
+        else -> {
+            val cmd = arrayListOf("processDeltas", primaryFlag).joinToString(" ")
+            processDeltas(DocumentCtx(cmd), primaryFlag == "--from-beginning")
+        }
     }
 }
 

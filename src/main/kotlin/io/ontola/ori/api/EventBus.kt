@@ -19,6 +19,7 @@
 package io.ontola.ori.api
 
 import com.github.jsonldjava.core.RDFDataset
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -51,7 +52,7 @@ class EventBus {
     }
 
     private val ctx = ORIContext.getCtx()
-    private val apiUpdateProducer = KafkaProducer<String, String>(ctx.kafkaOpts)
+    private val busProducer = KafkaProducer<String, String>(ctx.kafkaOpts)
 
     internal fun createSubscriber(waitForConnection: Boolean = false): KafkaConsumer<String, String> {
         val topic = ctx.config.getProperty("ori.api.kafka.topic", "ori-delta")
@@ -91,7 +92,11 @@ class EventBus {
     }
 
     internal fun publishEvent(event: Event): Future<RecordMetadata> {
-        return apiUpdateProducer.send(event.toRecord())
+        return busProducer.send(event.toRecord())
+    }
+
+    internal fun publishError(docCtx: DocumentCtx, e: Exception): Future<RecordMetadata> {
+        return busProducer.send(ErrorEvent(docCtx, e).toRecord())
     }
 
     internal fun publishError(type: String, value: Model, org: IRI?): Future<RecordMetadata> {
@@ -111,7 +116,7 @@ class EventBus {
             )
         }
 
-        return apiUpdateProducer.send(record)
+        return busProducer.send(record)
     }
 
     internal fun resetTopicToBeginning(

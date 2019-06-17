@@ -28,6 +28,7 @@ import java.util.ArrayList
 import java.util.HashMap
 
 class DeltaEvent(
+    private val docCtx: DocumentCtx,
     override val data: Model = LinkedHashModel()
 ) : Event(EventType.DELTA, null, null, data) {
     private val config: Properties = ORIContext.getCtx().config
@@ -42,6 +43,7 @@ class DeltaEvent(
                 }
             }
         } catch (e: Exception) {
+            EventBus.getBus().publishError(docCtx, e)
             printlnWithThread("Exception while parsing delta event: '%s'\n", e.toString())
             e.printStackTrace()
         }
@@ -88,7 +90,7 @@ class DeltaEvent(
                     value.forEach { stmt -> delta.deltaAdd(stmt) }
                     removals.add(key)
                 } else if (!forest.containsKey(key.stringValue())) {
-                    val store = DocumentSet(key.stringValue())
+                    val store = DocumentSet(docCtx.copy(iri = key.stringValue()))
                     for (statement in value) {
                         if (statement.`object` is BNode) {
                             val nodeData = statement.getObject()

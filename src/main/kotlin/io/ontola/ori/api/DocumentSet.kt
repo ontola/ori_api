@@ -34,9 +34,10 @@ import org.eclipse.rdf4j.model.*
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 
 class DocumentSet(
-    val iri: String,
+    private val docCtx: DocumentCtx,
     private val delta: Model = LinkedHashModel()
 ) {
+    private val iri = docCtx.iri!!
     private val config: Properties = ORIContext.getCtx().config
 
     companion object {
@@ -55,10 +56,6 @@ class DocumentSet(
 
     private fun baseDir(): File {
         return File("${config.getProperty("ori.api.dataDir")}/${hashKeys.joinToString("/")}")
-    }
-
-    fun deltaAdd(s: Resource, p: IRI, o: Value): Boolean {
-        return delta.add(s, p, o)
     }
 
     fun deltaAdd(s: Statement): Boolean {
@@ -90,9 +87,8 @@ class DocumentSet(
         val versionStamp = SimpleDateFormat("yyyyMMdd'T'HHmm").format(Date())
 
         return Document(
-            this.iri,
+            docCtx.copy(version = versionStamp),
             this.delta,
-            versionStamp,
             this.baseDir()
         )
     }
@@ -107,7 +103,7 @@ class DocumentSet(
                     PosixFilePermissions.asFileAttribute(dirPerms)
                 )
             } catch (e: IOException) {
-                throw Exception(String.format("Couldn't create hash directory tree '%s'", filePath), e)
+                EventBus.getBus().publishError(docCtx, Exception("Couldn't create hash directory tree '$filePath'", e))
             }
         }
     }
@@ -124,7 +120,7 @@ class DocumentSet(
             return null
         }
 
-        return Document.findExisting(iri, version, baseDir())
+        return Document.findExisting(docCtx, version, baseDir())
     }
 
     /** Publish an action to the bus for further processing */
@@ -146,7 +142,10 @@ class DocumentSet(
             )
             println("Made ${nextLatest.version} latest")
         } catch (e: IOException) {
-            println("Error while marking '${nextLatest.version}' as latest for resource '$iri'; ${e.message}")
+            EventBus.getBus().publishError(
+                docCtx,
+                Exception("Error while marking '${nextLatest.version}' as latest for resource '$iri'; ${e.message}", e)
+            )
         }
     }
 

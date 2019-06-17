@@ -18,25 +18,22 @@
 
 package io.ontola.ori.api
 
-import java.util.*
-import org.apache.kafka.clients.consumer.ConsumerRecord
-
-class DeltaProcessor(
-    private val record: ConsumerRecord<String, String>
-) {
-    private val config: Properties = ORIContext.getCtx().config
+class DeltaProcessor(private val docCtx: DocumentCtx) {
+    private val record = docCtx.record!!
 
     fun process() {
         try {
             printlnWithThread("[start][orid:${record.timestamp()}] Processing message")
-            val event = Event.parseRecord(record)
+            val event = Event.parseRecord(docCtx)
             if (event == null || event.type != EventType.DELTA || event.data == null) {
-                throw InvalidEventException("Received invalid event on delta bus")
+                EventBus.getBus().publishError(docCtx, InvalidEventException("Received invalid event on delta bus"))
+                return
             }
             event.process()
 
             printlnWithThread("[end][orid:%s] Done with message\n", record.timestamp())
         } catch (e: Exception) {
+            EventBus.getBus().publishError(docCtx, e)
             printlnWithThread("Exception while processing delta event: '%s'\n", e.toString())
             e.printStackTrace()
         }

@@ -20,7 +20,6 @@ package io.ontola.ori.api
 
 import com.github.jsonldjava.core.RDFDataset
 import createIRI
-import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.eclipse.rdf4j.model.IRI
 import org.eclipse.rdf4j.model.Model
@@ -42,7 +41,9 @@ open class Event(val type: EventType, open val iri: String?, val org: IRI?, open
         private val updateTopic = config.getProperty("ori.api.kafka.updateTopic")
         private val orgPredicate = RDFDataset.IRI("http://www.w3.org/2006/vcard/ns#hasOrganizationName").toString()
 
-        fun parseRecord(record: ConsumerRecord<String, String>): Event? {
+        fun parseRecord(docCtx: DocumentCtx): Event? {
+            val record = docCtx.record!!
+
             return when (record.topic()) {
                 deltaTopic -> {
                     val baseDocument = config.getProperty("ori.api.baseIRI")
@@ -53,7 +54,7 @@ open class Event(val type: EventType, open val iri: String?, val org: IRI?, open
                         rdfParser.parse(it, baseDocument)
                     }
 
-                    return DeltaEvent(event)
+                    return DeltaEvent(docCtx, event)
                 }
                 errorTopic -> {
                     TODO()
@@ -69,10 +70,10 @@ open class Event(val type: EventType, open val iri: String?, val org: IRI?, open
     }
 
     open fun process() {
-        TODO()
+        TODO("This is currently left to the subclasses")
     }
 
-    fun toRecord(): ProducerRecord<String, String> {
+    open fun toRecord(): ProducerRecord<String, String> {
         val record = ProducerRecord<String, String>(
             ORIContext.getCtx().config.getProperty("ori.api.kafka.updateTopic"),
             type.name.toLowerCase(),

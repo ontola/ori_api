@@ -19,5 +19,5 @@
 package io.ontola.ori.api
 
 enum class EventType {
-    CREATE, DELTA, UPDATE
+    CREATE, DELTA, ERROR, UPDATE
 }
