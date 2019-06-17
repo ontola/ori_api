@@ -18,148 +18,93 @@
 
 package io.ontola.ori.api
 
-import com.google.common.base.Splitter
-
-import java.io.File
-import java.io.IOException
-import java.math.BigInteger
-import java.nio.file.attribute.PosixFilePermissions
-import java.nio.file.Files
-import java.security.MessageDigest
-import java.text.SimpleDateFormat
-import java.util.Date
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.util.Properties
 
 import org.eclipse.rdf4j.model.*
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
+import java.util.ArrayList
+import java.util.HashMap
 
 class DeltaEvent(
-    val iri: String
-) {
+    override val data: Model = LinkedHashModel()
+) : Event(EventType.DELTA, null, null, data) {
     private val config: Properties = ORIContext.getCtx().config
 
-    companion object {
-        val verionStringMatcher = Regex("\\d{8}T\\d{4}")
-        private val digester: MessageDigest = getDigester()
-    }
-
-    private val id: String = iri.substring(iri.lastIndexOf('/') + 1)
-    private val hashKeys: Iterable<String>
-    private val delta: Model
-
-    init {
-        delta = LinkedHashModel()
-
-        val md5sum = digester.digest(id.toByteArray())
-        val hashedId = String.format("%032x", BigInteger(1, md5sum))
-        hashKeys = Splitter.fixedLength(4).split(hashedId)
-    }
-
-    private fun baseDir(): File {
-        return File("${config.getProperty("ori.api.dataDir")}/${hashKeys.joinToString("/")}")
-    }
-
-    fun deltaAdd(s: Resource, p: IRI, o: Value): Boolean {
-        return delta.add(s, p, o)
-    }
-
-    fun deltaAdd(s: Statement): Boolean {
-        return delta.add(s.subject, s.predicate, s.`object`)
-    }
-
-    fun anyObject(o: Resource): Boolean {
-        return delta.any { stmt -> stmt.`object` == o }
-    }
-
-    fun process() {
-        println("Processing deltaevent, $iri")
-        ensureDirectoryTree()
-        val latestVersion = findLatestDocument()
-        val newVersion = initNewVersion()
-
-        val event = when {
-            latestVersion == null -> "create"
-            latestVersion != newVersion -> "update"
-            else -> return
+    override fun process() {
+        try {
+            runBlocking {
+                for (delta in partition()) {
+                    launch {
+                        delta.process()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            printlnWithThread("Exception while parsing delta event: '%s'\n", e.toString())
+            e.printStackTrace()
         }
-
-        newVersion.save()
-        updateLatest(newVersion)
-        publishBlocking(event, newVersion)
     }
 
-    private fun initNewVersion(): Document {
-        val versionStamp = SimpleDateFormat("yyyyMMdd'T'hhmm").format(Date())
+    private fun printlnWithThread(message: String, vararg opts: Any?) {
+        val msg = String.format(message, *opts)
+        val separator = if (msg.startsWith("[")) "" else " "
+        val template = "[%s]$separator%s\n"
 
-        return Document(
-            this.iri,
-            this.delta,
-            versionStamp,
-            this.baseDir()
-        )
+        System.out.printf(template, Thread.currentThread().name, msg)
     }
 
-    private fun ensureDirectoryTree() {
-        val filePath = this.baseDir()
-        if (!filePath.exists()) {
-            val dirPerms = PosixFilePermissions.fromString("rwxr-xr-x")
-            try {
-                Files.createDirectories(
-                    filePath.toPath(),
-                    PosixFilePermissions.asFileAttribute(dirPerms)
-                )
-            } catch (e: IOException) {
-                throw Exception(String.format("Couldn't create hash directory tree '%s'", filePath), e)
+    /** Partitions a delta into separately processable slices. */
+    private fun partition(): MutableCollection<DocumentSet> {
+        val partitions = HashMap<Resource, List<Statement>>()
+        // TODO: implement an RDFHandler which does this while parsing
+        for (s: Statement in data) {
+            if (!s.context?.toString().equals(config.getProperty("ori.api.supplantIRI"))) {
+                printlnWithThread("Expected supplant statement, got %s", s.context)
+                continue
+            }
+
+            val stmtList = partitions[s.subject]
+            if (!stmtList.isNullOrEmpty()) {
+                partitions[s.subject] = stmtList.plus(s)
+            } else {
+                partitions[s.subject] = listOf(s)
             }
         }
-    }
 
-    private fun findLatestDocument(): Document? {
-        val timestampMatcher = verionStringMatcher
-
-        val version = baseDir()
-            .list { dir: File, name: String -> dir.isDirectory && name.matches(timestampMatcher) }
-            .sortedArray()
-            .lastOrNull()
-
-        if (version.isNullOrEmpty()) {
-            return null
+        val forest = HashMap<String, DocumentSet>()
+        while (partitions.isNotEmpty()) {
+            val removals = ArrayList<Resource>()
+            for ((key, value) in partitions) {
+                if (key is BNode) {
+                    val delta = forest.values.find { event -> event.anyObject(key) }
+                    if (delta == null) {
+                        removals.add(key)
+                        val danglingResource = LinkedHashModel(data.filter { s -> s.subject == key })
+                        EventBus.getBus().publishError("dangling-resource", danglingResource, null)
+                        continue
+                    }
+                    value.forEach { stmt -> delta.deltaAdd(stmt) }
+                    removals.add(key)
+                } else if (!forest.containsKey(key.stringValue())) {
+                    val store = DocumentSet(key.stringValue())
+                    for (statement in value) {
+                        if (statement.`object` is BNode) {
+                            val nodeData = statement.getObject()
+                            if (nodeData != null) {
+                                partitions[nodeData]!!.forEach { bStmt -> store.deltaAdd(bStmt) }
+                            }
+                        }
+                        store.deltaAdd(statement)
+                    }
+                    forest[key.stringValue()] = store
+                    removals.add(key)
+                }
+            }
+            removals.forEach { r -> partitions.remove(r) }
         }
 
-        return Document.findExisting(iri, version, baseDir())
-    }
-
-    /** Publish an action to the bus for further processing */
-    private fun publishBlocking(type: String, version: Document) {
-        EventBus
-            .getBus()
-            .publishEvent(type, iri, version.organization)
-            .get()
-    }
-
-    private fun updateLatest(nextLatest: Document) {
-        try {
-            val latestDir = File(String.format("%s/%s", this.baseDir(), "latest"))
-            Files.deleteIfExists(latestDir.toPath())
-            // The link needs to be relative to work across volume mounts
-            Files.createSymbolicLink(
-                latestDir.toPath(),
-                nextLatest.dir().relativeTo(this.baseDir()).toPath()
-            )
-        } catch (e: IOException) {
-            println("Error while marking '${nextLatest.version}' as latest for resource '$iri'; ${e.message}")
-        }
-    }
-
-    override operator fun equals(other: Any?): Boolean {
-        if (other == null || this.javaClass != other.javaClass) {
-            return false
-        }
-
-        return iri == (other as DeltaEvent).iri
-    }
-
-    override fun hashCode(): Int {
-        return iri.hashCode()
+        return forest.values
     }
 }

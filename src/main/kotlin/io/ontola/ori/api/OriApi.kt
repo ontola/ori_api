@@ -19,14 +19,9 @@
 package io.ontola.ori.api
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.*
-import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.consumer.KafkaConsumer
 import java.io.File
-import java.lang.Exception
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
-import java.time.Duration
 import java.util.*
 import kotlin.system.exitProcess
 
@@ -43,43 +38,12 @@ fun main(args: Array<String>) = runBlocking {
     printInitMessage(ctx.config)
 
     ensureOutputFolder(ctx.config)
-    val threadCount = Integer.parseInt(ctx.config.getProperty("ori.api.threadCount"))
 
     if (args.isNotEmpty() && args[0] == "--clean-old-versions") {
         cleanOldVersionsAsync().await()
         exitProcess(0)
-    }
-
-    try {
-        val consumer = EventBus.getBus().createSubscriber()
-        if (args.isNotEmpty() && args[0] == "--from-beginning") {
-            EventBus.getBus().resetTopicToBeginning(consumer)
-        }
-
-        val records = produceRecords(consumer)
-
-        repeat(threadCount) { consumeRecords(records) }
-    } catch (e: Exception) {
-        println("Fatal error occurred: ${e.message}")
-        e.printStackTrace()
-        exitProcess(1)
-    }
-}
-
-@ExperimentalCoroutinesApi
-fun CoroutineScope.produceRecords(consumer: KafkaConsumer<String, String>): ReceiveChannel<ConsumerRecord<String, String>> =
-    produce {
-        while (true) {
-            for (record in consumer.poll(Duration.ofMillis(0))) {
-                send(record)
-                delay(100)
-            }
-        }
-    }
-
-fun CoroutineScope.consumeRecords(channel: ReceiveChannel<ConsumerRecord<String, String>>) = launch {
-    for (record in channel) {
-        launch { DeltaProcessor(record).process() }
+    } else {
+        processDeltas(args.isNotEmpty() && args[0] == "--from-beginning")
     }
 }
 

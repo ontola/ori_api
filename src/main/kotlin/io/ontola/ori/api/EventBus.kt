@@ -53,7 +53,7 @@ class EventBus {
     private val ctx = ORIContext.getCtx()
     private val apiUpdateProducer = KafkaProducer<String, String>(ctx.kafkaOpts)
 
-    internal fun createSubscriber(): KafkaConsumer<String, String> {
+    internal fun createSubscriber(waitForConnection: Boolean = false): KafkaConsumer<String, String> {
         val topic = ctx.config.getProperty("ori.api.kafka.topic", "ori-delta")
 
         System.out.printf(
@@ -73,8 +73,10 @@ class EventBus {
                 .map { t: PartitionInfo -> Integer.toString(t.partition()) }
                 .collect(Collectors.joining(","))
 
-            while (consumer.assignment().size == 0) {
-                consumer.poll(Duration.ofMillis(100))
+            if (waitForConnection) {
+                while (consumer.assignment().size == 0) {
+                    consumer.poll(Duration.ofMillis(100))
+                }
             }
 
             println("Subscribed to topic '$topic' with partitions '$partitionList'")
@@ -88,16 +90,8 @@ class EventBus {
         }
     }
 
-    internal fun publishEvent(type: String, iri: String, org: IRI?): Future<RecordMetadata> {
-        val record = ProducerRecord<String, String>(ctx.config.getProperty("ori.api.kafka.updateTopic"), type, iri)
-        if (org != null) {
-            record.headers().add(
-                RDFDataset.IRI("http://www.w3.org/2006/vcard/ns#hasOrganizationName").toString(),
-                org.toString().toByteArray()
-            )
-        }
-
-        return apiUpdateProducer.send(record)
+    internal fun publishEvent(event: Event): Future<RecordMetadata> {
+        return apiUpdateProducer.send(event.toRecord())
     }
 
     internal fun publishError(type: String, value: Model, org: IRI?): Future<RecordMetadata> {

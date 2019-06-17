@@ -17,7 +17,7 @@ suspend fun cleanOldVersionsAsync() = GlobalScope.async {
 }
 
 fun processDir(dir: Path) {
-    val isVersionDir = DeltaEvent.verionStringMatcher
+    val isVersionDir = DocumentSet.versionStringMatcher
 
     dir
         .toFile()
