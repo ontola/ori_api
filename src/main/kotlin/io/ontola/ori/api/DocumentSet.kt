@@ -87,7 +87,7 @@ class DocumentSet(
     }
 
     private fun initNewVersion(): Document {
-        val versionStamp = SimpleDateFormat("yyyyMMdd'T'hhmm").format(Date())
+        val versionStamp = SimpleDateFormat("yyyyMMdd'T'HHmm").format(Date())
 
         return Document(
             this.iri,
