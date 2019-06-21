@@ -20,12 +20,9 @@ package io.ontola.ori.api
 
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import java.util.Properties
-
 import org.eclipse.rdf4j.model.*
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
-import java.util.ArrayList
-import java.util.HashMap
+import java.util.*
 
 class DeltaEvent(
     private val docCtx: DocumentCtx,
@@ -90,7 +87,7 @@ class DeltaEvent(
                     value.forEach { stmt -> delta.deltaAdd(stmt) }
                     removals.add(key)
                 } else if (!forest.containsKey(key.stringValue())) {
-                    val store = DocumentSet(docCtx.copy(iri = key.stringValue()))
+                    val store = DocumentSet(docCtx.copy(iri = key as IRI))
                     for (statement in value) {
                         if (statement.`object` is BNode) {
                             val nodeData = statement.getObject()

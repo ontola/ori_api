@@ -18,44 +18,26 @@
 
 package io.ontola.ori.api
 
-import com.google.common.base.Splitter
-
+import org.eclipse.rdf4j.model.Model
+import org.eclipse.rdf4j.model.Resource
+import org.eclipse.rdf4j.model.Statement
+import org.eclipse.rdf4j.model.impl.LinkedHashModel
 import java.io.File
 import java.io.IOException
-import java.math.BigInteger
-import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.Files
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Properties
-
-import org.eclipse.rdf4j.model.*
-import org.eclipse.rdf4j.model.impl.LinkedHashModel
+import java.util.*
 
 class DocumentSet(
     private val docCtx: DocumentCtx,
     private val delta: Model = LinkedHashModel()
 ) {
     private val iri = docCtx.iri!!
-    private val config: Properties = ORIContext.getCtx().config
+    private val baseDir = docCtx.dir()
 
     companion object {
+        val versionStringFormat = SimpleDateFormat("yyyyMMdd'T'HHmm")
         val versionStringMatcher = Regex("\\d{8}T\\d{4}")
-        private val digester: MessageDigest = getDigester()
-    }
-
-    private val id: String = iri.substring(iri.lastIndexOf('/') + 1)
-    private val hashKeys: Iterable<String>
-
-    init {
-        val md5sum = digester.digest(id.toByteArray())
-        val hashedId = String.format("%032x", BigInteger(1, md5sum))
-        hashKeys = Splitter.fixedLength(4).split(hashedId)
-    }
-
-    private fun baseDir(): File {
-        return File("${config.getProperty("ori.api.dataDir")}/${hashKeys.joinToString("/")}")
     }
 
     fun deltaAdd(s: Statement): Boolean {
@@ -68,77 +50,70 @@ class DocumentSet(
 
     fun process() {
         println("Processing deltaevent, $iri")
-        ensureDirectoryTree()
+        try {
+            ensureDirectoryTree(baseDir)
+        } catch (e: Exception) {
+            EventBus.getBus().publishError(docCtx, e)
+            return
+        }
         val latestVersion = findLatestDocument()
         val newVersion = initNewVersion()
 
-        val event = when {
+        val eventType = when {
             latestVersion == null -> EventType.CREATE
             latestVersion != newVersion -> EventType.UPDATE
             else -> return
         }
+        val event = Event(eventType, iri, newVersion.organization, null)
 
         newVersion.save()
+        updateActivityStream(event, newVersion, latestVersion)
+        newVersion.archive()
         updateLatest(newVersion)
-        publishBlocking(event, newVersion)
+        publishBlocking(event)
     }
 
     private fun initNewVersion(): Document {
-        val versionStamp = SimpleDateFormat("yyyyMMdd'T'HHmm").format(Date())
+        val versionStamp = versionStringFormat.format(Date())
 
         return Document(
             docCtx.copy(version = versionStamp),
-            this.delta,
-            this.baseDir()
+            delta,
+            baseDir
         )
-    }
-
-    private fun ensureDirectoryTree() {
-        val filePath = this.baseDir()
-        if (!filePath.exists()) {
-            val dirPerms = PosixFilePermissions.fromString("rwxr-xr-x")
-            try {
-                Files.createDirectories(
-                    filePath.toPath(),
-                    PosixFilePermissions.asFileAttribute(dirPerms)
-                )
-            } catch (e: IOException) {
-                EventBus.getBus().publishError(docCtx, Exception("Couldn't create hash directory tree '$filePath'", e))
-            }
-        }
     }
 
     private fun findLatestDocument(): Document? {
         val timestampMatcher = versionStringMatcher
 
-        val version = baseDir()
+        val version = baseDir
             .list { dir: File, name: String -> dir.isDirectory && name.matches(timestampMatcher) }
-            .sortedArray()
-            .lastOrNull()
+            ?.sortedArray()
+            ?.lastOrNull()
 
         if (version.isNullOrEmpty()) {
             return null
         }
 
-        return Document.findExisting(docCtx, version, baseDir())
+        return Document.findExisting(docCtx, version, baseDir)
     }
 
     /** Publish an action to the bus for further processing */
-    private fun publishBlocking(type: EventType, version: Document) {
+    private fun publishBlocking(event: Event) {
         EventBus
             .getBus()
-            .publishEvent(Event(type, iri, version.organization, null))
+            .publishEvent(event)
             .get()
     }
 
     private fun updateLatest(nextLatest: Document) {
         try {
-            val latestDir = File(String.format("%s/%s", this.baseDir(), "latest"))
+            val latestDir = docCtx.copy(version = "latest").dir()
             Files.deleteIfExists(latestDir.toPath())
             // The link needs to be relative to work across volume mounts
             Files.createSymbolicLink(
                 latestDir.toPath(),
-                nextLatest.dir().relativeTo(this.baseDir()).toPath()
+                nextLatest.dir().relativeTo(baseDir).toPath()
             )
             println("Made ${nextLatest.version} latest")
         } catch (e: IOException) {
@@ -146,6 +121,20 @@ class DocumentSet(
                 docCtx,
                 Exception("Error while marking '${nextLatest.version}' as latest for resource '$iri'; ${e.message}", e)
             )
+        }
+    }
+
+    private fun updateActivityStream(event: Event, newVersion: Document, oldVersion: Document?) {
+        val ctx = docCtx.copy(version = newVersion.version)
+        try {
+            val stream = ActivityStream(ctx)
+            if (oldVersion != null) {
+                stream.load(oldVersion.asDir())
+            }
+            stream.append(event)
+            stream.save()
+        } catch (e: Exception) {
+            EventBus.getBus().publishError(ctx, e)
         }
     }
 

@@ -18,7 +18,8 @@
 
 package io.ontola.ori.api
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
@@ -44,7 +45,7 @@ fun main(args: Array<String>) = runBlocking<Unit> {
         primaryFlag = args[0]
     }
 
-    when(primaryFlag) {
+    when (primaryFlag) {
         "--clean-old-versions" -> {
             cleanOldVersionsAsync().await()
             exitProcess(0)

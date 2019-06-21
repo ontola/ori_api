@@ -1,6 +1,8 @@
 package io.ontola.ori.api
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.file.Path
 

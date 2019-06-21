@@ -24,6 +24,7 @@ repositories {
 }
 
 dependencies {
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.9.8")
     implementation("com.google.guava:guava:27.0.1-jre")
     implementation("org.apache.kafka:kafka-clients:2.2.0")
     implementation("org.apache.logging.log4j:log4j-core:2.11.2")
@@ -37,8 +38,10 @@ dependencies {
     implementation("org.eclipse.rdf4j:rdf4j-rio:2.5.2")
     // Fixes undefined HexBinaryAdapter in org.eclipse.rdf4j.rio.helpers::AbstractRDFParser
     implementation("javax.xml.bind:jaxb-api:2.3.0")
+    implementation("com.github.jsonld-java:jsonld-java:0.12.4")
 
     implementation(kotlin("stdlib-jdk8"))
+    implementation(kotlin("reflect"))
 
     // Use JUnit test framework
     testImplementation("junit:junit:4.12")

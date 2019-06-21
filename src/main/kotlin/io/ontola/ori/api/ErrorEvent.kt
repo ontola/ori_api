@@ -42,7 +42,7 @@ class ErrorEvent(private val docCtx: DocumentCtx, private val e: Exception) :
         }
 
         if (docCtx.iri != null) {
-            error.headers().add("iri", docCtx.iri.toByteArray())
+            error.headers().add("iri", docCtx.iri.stringValue().toByteArray())
         }
 
         if (docCtx.version != null) {

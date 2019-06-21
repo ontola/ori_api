@@ -19,21 +19,17 @@
 package io.ontola.ori.api
 
 import com.github.jsonldjava.core.RDFDataset
-import createIRI
+import io.ontola.rdfUtils.createIRI
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.eclipse.rdf4j.model.IRI
 import org.eclipse.rdf4j.model.Model
-import org.eclipse.rdf4j.model.impl.LinkedHashModel
-import org.eclipse.rdf4j.rio.RDFFormat
-import org.eclipse.rdf4j.rio.Rio
-import org.eclipse.rdf4j.rio.helpers.StatementCollector
-import java.io.StringReader
+import org.eclipse.rdf4j.model.Resource
 import java.nio.charset.Charset
 import java.util.*
 
 class InvalidEventException(message: String) : Exception(message)
 
-open class Event(val type: EventType, open val iri: String?, val org: IRI?, open val data: Model?) {
+open class Event(val type: EventType, open val iri: Resource?, val org: IRI?, open val data: Model?) {
     companion object {
         private val config: Properties = ORIContext.getCtx().config
         private val deltaTopic = config.getProperty("ori.api.kafka.topic")
@@ -46,13 +42,7 @@ open class Event(val type: EventType, open val iri: String?, val org: IRI?, open
 
             return when (record.topic()) {
                 deltaTopic -> {
-                    val baseDocument = config.getProperty("ori.api.baseIRI")
-                    val rdfParser = Rio.createParser(RDFFormat.NQUADS)
-                    val event = LinkedHashModel()
-                    rdfParser.setRDFHandler(StatementCollector(event))
-                    StringReader(record.value()).use {
-                        rdfParser.parse(it, baseDocument)
-                    }
+                    val event = ORio.parseToModel(record.value())
 
                     return DeltaEvent(docCtx, event)
                 }
@@ -62,7 +52,7 @@ open class Event(val type: EventType, open val iri: String?, val org: IRI?, open
                 updateTopic -> {
                     val org = record.headers().lastHeader(orgPredicate).value().toString(Charset.defaultCharset())
 
-                    return Event(EventType.UPDATE, record.value(), createIRI(org), null)
+                    return Event(EventType.UPDATE, createIRI(record.value()), createIRI(org), null)
                 }
                 else -> null
             }
@@ -77,7 +67,7 @@ open class Event(val type: EventType, open val iri: String?, val org: IRI?, open
         val record = ProducerRecord<String, String>(
             ORIContext.getCtx().config.getProperty("ori.api.kafka.updateTopic"),
             type.name.toLowerCase(),
-            iri
+            iri?.stringValue()
         )
         if (org != null) {
             record.headers().add(

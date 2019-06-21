@@ -26,19 +26,18 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import java.time.Duration
 import kotlin.system.exitProcess
 
+/**
+ * Processes messages from the 'updates' channel. Updates are downstream from the delta's, containing aggregate
+ * information.
+ */
 @ExperimentalCoroutinesApi
-fun processDeltas(docCtx: DocumentCtx, fromBeginning: Boolean) = runBlocking {
-    val ctx = ORIContext.getCtx()
-    val threadCount = Integer.parseInt(ctx.config.getProperty("ori.api.threadCount"))
+fun processUpdates() = runBlocking {
     try {
-        val consumer = EventBus.getBus().createSubscriber(fromBeginning)
-        if (fromBeginning) {
-            EventBus.getBus().resetTopicToBeginning(consumer)
-        }
+        val consumer = EventBus.getBus().createSubscriber()
 
-        val records = produceDeltas(consumer)
+        val records = produceUpdates(consumer)
 
-        repeat(threadCount) { consumeDeltas(docCtx, records) }
+        consumeUpdates(records)
     } catch (e: Exception) {
         println("Fatal error occurred: ${e.message}")
         e.printStackTrace()
@@ -47,7 +46,7 @@ fun processDeltas(docCtx: DocumentCtx, fromBeginning: Boolean) = runBlocking {
 }
 
 @ExperimentalCoroutinesApi
-private fun CoroutineScope.produceDeltas(consumer: KafkaConsumer<String, String>): ReceiveChannel<ConsumerRecord<String, String>> =
+private fun CoroutineScope.produceUpdates(consumer: KafkaConsumer<String, String>): ReceiveChannel<ConsumerRecord<String, String>> =
     produce {
         while (true) {
             for (record in consumer.poll(Duration.ofMillis(0))) {
@@ -57,9 +56,8 @@ private fun CoroutineScope.produceDeltas(consumer: KafkaConsumer<String, String>
         }
     }
 
-private fun CoroutineScope.consumeDeltas(docCtx: DocumentCtx, channel: ReceiveChannel<ConsumerRecord<String, String>>) =
-    launch {
-        for (record in channel) {
-            launch { DeltaProcessor(docCtx.copy(record = record)).process() }
-        }
+private fun CoroutineScope.consumeUpdates(channel: ReceiveChannel<ConsumerRecord<String, String>>) = launch {
+    for (record in channel) {
+        launch { UpdateProcessor(record).process() }
     }
+}

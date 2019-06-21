@@ -1,5 +1,5 @@
 /*
- * ORI API
+ * ActivityStreams
  * Copyright (C), Argu BV
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,10 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import org.eclipse.rdf4j.model.IRI
-import org.eclipse.rdf4j.model.impl.SimpleValueFactory
+package io.ontola.activitystreams
 
-fun createIRI(iri: String): IRI {
-    val factory = SimpleValueFactory.getInstance()
-    return factory.createIRI(iri)
+import io.ontola.activitystreams.vocabulary.AS
+import io.ontola.rdfUtils.createIRI
+import org.eclipse.rdf4j.model.IRI
+import org.eclipse.rdf4j.model.vocabulary.RDF
+
+internal fun determinePredicate(name: String): IRI {
+    // Setting as:type causes json-ld serializer to print "Collection:Page" over "CollectionPage"
+    return when (name) {
+        "type" -> RDF.TYPE
+        else -> createIRI(AS.NAMESPACE, name)
+    }
 }
+

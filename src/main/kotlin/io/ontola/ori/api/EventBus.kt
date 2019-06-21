@@ -19,7 +19,6 @@
 package io.ontola.ori.api
 
 import com.github.jsonldjava.core.RDFDataset
-import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -31,7 +30,6 @@ import org.eclipse.rdf4j.model.IRI
 import org.eclipse.rdf4j.model.Model
 import org.eclipse.rdf4j.rio.RDFFormat
 import java.io.StringWriter
-import java.lang.Exception
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.Future
@@ -96,6 +94,8 @@ class EventBus {
     }
 
     internal fun publishError(docCtx: DocumentCtx, e: Exception): Future<RecordMetadata> {
+        println("Caught error ${e.message}")
+        e.printStackTrace()
         return busProducer.send(ErrorEvent(docCtx, e).toRecord())
     }
 

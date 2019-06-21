@@ -21,19 +21,16 @@ package io.ontola.ori.api
 import com.github.jsonldjava.core.RDFDataset
 import org.eclipse.rdf4j.RDF4JException
 import org.eclipse.rdf4j.model.IRI
-import java.io.File
-import java.io.FileNotFoundException
-import java.io.FileOutputStream
-
 import org.eclipse.rdf4j.model.Model
 import org.eclipse.rdf4j.model.Resource
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory
 import org.eclipse.rdf4j.model.util.Models
-import org.eclipse.rdf4j.rio.*
-import org.eclipse.rdf4j.rio.helpers.StatementCollector
+import org.eclipse.rdf4j.rio.RDFFormat
 import org.zeroturnaround.zip.ZipUtil
-import java.io.IOException
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
 
@@ -56,8 +53,7 @@ class Document(
     private val iri = docCtx.iri!!
     internal val version = docCtx.version!!
 
-    private val id: String = iri.substring(iri.lastIndexOf('/') + 1)
-    private val subject: Resource = SimpleValueFactory.getInstance().createIRI(iri)
+    private val id: String = iri.stringValue().substring(iri.stringValue().lastIndexOf('/') + 1)
     private val filePath = this.dir()
     private val formats = listOf(
         RDFFormat.NTRIPLES,
@@ -78,20 +74,7 @@ class Document(
                 ?.`object` as IRI?
         }
 
-    fun dir(): File {
-        return File(String.format("%s/%s", baseDir.absolutePath, version))
-    }
-
-
-    fun save() {
-        println("Writing subject '$subject' with version '$version'")
-
-        ensureDirectory()
-        serialize()
-        archive()
-    }
-
-    private fun archive() {
+    fun archive() {
         val tmp = createTempFile("ori-api-$id-$version")
         tmp.deleteOnExit()
         ZipUtil.pack(filePath, tmp)
@@ -104,32 +87,31 @@ class Document(
         Files.move(tmp.toPath(), archive.toPath())
     }
 
-    private fun ensureDirectory() {
-        val filePath = this.dir()
-        if (!filePath.exists()) {
-            val dirPerms = PosixFilePermissions.fromString("rwxr-xr-x")
-            try {
-                Files.createDirectory(
-                    filePath.toPath(),
-                    PosixFilePermissions.asFileAttribute(dirPerms)
-                )
-            } catch (e: IOException) {
-                val dirException = Exception(String.format("Couldn't create directory '%s'", filePath), e)
-                EventBus.getBus().publishError(docCtx, dirException)
-            }
+    fun asDir(): File {
+        return File(String.format("%s/%s/activity", baseDir.absolutePath, version))
+    }
+
+    fun dir(): File {
+        return File(String.format("%s/%s", baseDir.absolutePath, version))
+    }
+
+    fun save() {
+        println("Writing subject '$iri' with version '$version'")
+
+        try {
+            ensureDirectoryTree(this.dir())
+        } catch (e: Exception) {
+            EventBus.getBus().publishError(docCtx, e)
         }
+        serialize()
     }
 
     /**
      * Reads an existing (n-quads) file from disk into the model, overwriting any previous statements.
      */
     private fun read() {
-        val newData = LinkedHashModel()
-        val rdfParser = Rio.createParser(RDFFormat.NQUADS)
         val nqFile = File("$baseDir/$version/$id.nq")
-
-        rdfParser.setRDFHandler(StatementCollector(newData))
-        rdfParser.parse(nqFile.inputStream(), iri)
+        val newData = ORio.parseToModel(nqFile.inputStream(), iri.stringValue())
 
         data.clear()
         data.addAll(newData)

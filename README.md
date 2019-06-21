@@ -6,6 +6,9 @@ every incoming resource.
 
 Also included in the `nginx` folder is a basic configuration and dockerfile to serve the partitioned folder structure.
 
+Due to their concise and easy syntax, the [n-quads serializations](https://www.w3.org/TR/n-quads/) are considered canon.
+These are also used to determine intra-version state changes, any differences between the other formats are ignored.
+
 ## Licence
 ORI API
 Copyright (C) 2019, Argu BV

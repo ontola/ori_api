@@ -18,16 +18,16 @@
 
 package io.ontola.ori.api
 
+import com.github.jsonldjava.core.JsonLdConsts
 import org.eclipse.rdf4j.model.Model
-import org.eclipse.rdf4j.rio.RDFFormat
-import org.eclipse.rdf4j.rio.RDFWriter
-import org.eclipse.rdf4j.rio.Rio
-import org.eclipse.rdf4j.rio.WriterConfig
+import org.eclipse.rdf4j.model.impl.LinkedHashModel
+import org.eclipse.rdf4j.rio.*
 import org.eclipse.rdf4j.rio.helpers.BasicWriterSettings
 import org.eclipse.rdf4j.rio.helpers.JSONLDMode
 import org.eclipse.rdf4j.rio.helpers.JSONLDSettings
-import java.io.OutputStream
-import java.io.Writer
+import org.eclipse.rdf4j.rio.helpers.StatementCollector
+import java.io.*
+import java.nio.charset.StandardCharsets
 
 /**
  * Rio wrapper to only include namespaces mentioned in the data.
@@ -38,16 +38,11 @@ import java.io.Writer
 class ORio(private val writer: RDFWriter) : RDFWriter by writer {
 
     init {
-        val writerConfig = WriterConfig()
-        writerConfig.set(BasicWriterSettings.INLINE_BLANK_NODES, true)
+        writer.writerConfig = getWriterConfig(writer.rdfFormat)
+    }
 
-        if (writer.rdfFormat == RDFFormat.JSONLD) {
-            writerConfig.set(JSONLDSettings.JSONLD_MODE, JSONLDMode.COMPACT)
-            writerConfig.set(JSONLDSettings.USE_NATIVE_TYPES, true)
-            writerConfig.set(JSONLDSettings.HIERARCHICAL_VIEW, true)
-        }
-
-        writer.writerConfig = writerConfig
+    fun setContext(ns: String) {
+        writer.handleNamespace(JsonLdConsts.CONTEXT, ns)
     }
 
     fun handleUsedNamespaces(statements: Model) {
@@ -80,16 +75,90 @@ class ORio(private val writer: RDFWriter) : RDFWriter by writer {
     }
 
     companion object {
+        val ACTIVITY_JSONLD = RDFFormat(
+            "activitystream",
+            "application/activity+json",
+            StandardCharsets.UTF_8,
+            listOf("activity.json"),
+            true,
+            true
+        )
+
         fun createWriter(format: RDFFormat, out: OutputStream): ORio {
-            val rdfWriter = Rio.createWriter(format, out)
+            val rdfWriter =
+                if (format === RDFFormat.JSONLD) {
+                    JSONLDWriter(out, getWriterConfig(RDFFormat.JSONLD))
+                } else {
+                    Rio.createWriter(format, out)
+                }
 
             return ORio(rdfWriter)
         }
 
         fun createWriter(format: RDFFormat, writer: Writer): ORio {
-            val rdfWriter = Rio.createWriter(format, writer)
+            val rdfWriter =
+                if (format === RDFFormat.JSONLD) {
+                    JSONLDWriter(writer, getWriterConfig(RDFFormat.JSONLD))
+                } else {
+                    Rio.createWriter(format, writer)
+                }
 
             return ORio(rdfWriter)
+        }
+
+        private fun getWriterConfig(format: RDFFormat): WriterConfig {
+            val writerConfig = WriterConfig()
+            writerConfig.set(BasicWriterSettings.INLINE_BLANK_NODES, true)
+
+            if (format == RDFFormat.JSONLD) {
+                writerConfig.set(JSONLDSettings.HIERARCHICAL_VIEW, true)
+                writerConfig.set(JSONLDSettings.JSONLD_MODE, JSONLDMode.COMPACT)
+                writerConfig.set(JSONLDSettings.OPTIMIZE, true)
+                writerConfig.set(JSONLDSettings.USE_NATIVE_TYPES, true)
+            }
+
+            return writerConfig
+        }
+
+        private fun parseToModel(format: RDFFormat = RDFFormat.NQUADS, block: ((String, RDFParser) -> Unit)): Model {
+            val baseDocument = ORIContext.getCtx().config.getProperty("ori.api.baseIRI")
+            val rdfParser = Rio.createParser(format)
+            val model = LinkedHashModel()
+            rdfParser.setRDFHandler(StatementCollector(model))
+            block(baseDocument, rdfParser)
+
+            return model
+        }
+
+        fun parseToModel(reader: Reader, baseDoc: String? = null): Model {
+            return parseToModel { baseDocument, rdfParser ->
+                reader.use {
+                    rdfParser.parse(it, baseDoc ?: baseDocument)
+                }
+            }
+        }
+
+        fun parseToModel(string: String, baseDoc: String? = null): Model {
+            var model: Model = LinkedHashModel()
+            StringReader(string).use {
+                model = parseToModel(it, baseDoc)
+            }
+            return model
+        }
+
+        fun parseToModel(file: File, baseDoc: String? = null): Model {
+            val stream = file.inputStream()
+            val format = when {
+                file.name.endsWith(".${RDFFormat.NQUADS.defaultFileExtension}") -> RDFFormat.NQUADS
+                file.name.endsWith(".${ACTIVITY_JSONLD.defaultFileExtension}") -> RDFFormat.JSONLD
+                else -> throw Exception("Use an n-quads or activitystreams file")
+            }
+
+            return parseToModel(format) { baseDocument, rdfParser -> rdfParser.parse(stream, baseDoc ?: baseDocument) }
+        }
+
+        fun parseToModel(stream: InputStream, baseDoc: String? = null): Model {
+            return parseToModel { baseDocument, rdfParser -> rdfParser.parse(stream, baseDoc ?: baseDocument) }
         }
 
         private fun reverseNSMap(): Map<String, String> {
@@ -137,6 +206,7 @@ class ORio(private val writer: RDFWriter) : RDFWriter by writer {
             nsMap["http://schema.org/"] = "schema"
             nsMap["http://www.w3.org/ns/shacl#"] = "sh"
             nsMap["http://www.w3.org/2004/02/skos/core#"] = "skos"
+            nsMap["http://www.w3.org/2006/vcard/ns#"] = "vcard"
             nsMap["http://www.wikidata.org/entity/"] = "wd"
             nsMap["https://www.wikidata.org/wiki/Special:EntityData/"] = "wdata"
             nsMap["http://www.wikidata.org/reference/"] = "wdref"
