@@ -29,35 +29,46 @@ import kotlin.system.exitProcess
 /**
  * Processes messages from the 'updates' channel. Updates are downstream from the delta's, containing aggregate
  * information.
+ *
+ * Due to the fact that we're working with a file system, it's of vital importance concurrency is managed properly.
+ * Locking
  */
 @ExperimentalCoroutinesApi
-fun processUpdates() = runBlocking {
-    try {
-        val consumer = EventBus.getBus().createSubscriber()
+suspend fun processUpdates(): Job {
+    return withContext(Dispatchers.Default) {
+        try {
+            val updateTopic = ORIContext.getCtx().config.getProperty("ori.api.kafka.updateTopic")
+            val consumer = EventBus.getBus().createSubscriber(topic = updateTopic)
 
-        val records = produceUpdates(consumer)
+            val records = produceUpdates(consumer)
 
-        consumeUpdates(records)
-    } catch (e: Exception) {
-        println("Fatal error occurred: ${e.message}")
-        e.printStackTrace()
-        exitProcess(1)
+            return@withContext consumeUpdatesAsync(records)
+        } catch (e: Exception) {
+            println("Fatal error occurred: ${e.message}")
+            e.printStackTrace()
+            exitProcess(1)
+        }
     }
 }
 
 @ExperimentalCoroutinesApi
-private fun CoroutineScope.produceUpdates(consumer: KafkaConsumer<String, String>): ReceiveChannel<ConsumerRecord<String, String>> =
-    produce {
-        while (true) {
-            for (record in consumer.poll(Duration.ofMillis(0))) {
-                send(record)
-                delay(100)
-            }
+private fun CoroutineScope.produceUpdates(
+    consumer: KafkaConsumer<String, String>
+): ReceiveChannel<ConsumerRecord<String, String>> = produce {
+    while (true) {
+        for (record in consumer.poll(Duration.ofMillis(50))) {
+            send(record)
         }
+        delay(100)
     }
+}
 
-private fun CoroutineScope.consumeUpdates(channel: ReceiveChannel<ConsumerRecord<String, String>>) = launch {
+private fun CoroutineScope.consumeUpdatesAsync(
+    channel: ReceiveChannel<ConsumerRecord<String, String>>
+) = launch {
     for (record in channel) {
-        launch { UpdateProcessor(record).process() }
+        supervisorScope {
+            UpdateProcessor(record).process()
+        }
     }
 }

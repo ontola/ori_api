@@ -18,12 +18,14 @@
 
 package io.ontola.ori.api
 
-class DeltaProcessor(private val docCtx: DocumentCtx) {
-    private val record = docCtx.record!!
+import io.ontola.ori.api.context.ResourceCtx
+
+class DeltaProcessor(private val docCtx: ResourceCtx<*>) {
+    private val record = docCtx.ctx.record
 
     fun process() {
         try {
-            printlnWithThread("[start][orid:${record.timestamp()}] Processing message")
+            printlnWithThread("[start][orid:${record?.timestamp()}] Processing message")
             val event = Event.parseRecord(docCtx)
             if (event == null || event.type != EventType.DELTA || event.data == null) {
                 EventBus.getBus().publishError(docCtx, InvalidEventException("Received invalid event on delta bus"))
@@ -31,7 +33,7 @@ class DeltaProcessor(private val docCtx: DocumentCtx) {
             }
             event.process()
 
-            printlnWithThread("[end][orid:%s] Done with message\n", record.timestamp())
+            printlnWithThread("[end][orid:%s] Done with message\n", record?.timestamp())
         } catch (e: Exception) {
             EventBus.getBus().publishError(docCtx, e)
             printlnWithThread("Exception while processing delta event: '%s'\n", e.toString())

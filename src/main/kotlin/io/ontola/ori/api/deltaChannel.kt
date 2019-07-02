@@ -18,6 +18,7 @@
 
 package io.ontola.ori.api
 
+import io.ontola.ori.api.context.ResourceCtx
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
@@ -27,7 +28,7 @@ import java.time.Duration
 import kotlin.system.exitProcess
 
 @ExperimentalCoroutinesApi
-fun processDeltas(docCtx: DocumentCtx, fromBeginning: Boolean) = runBlocking {
+suspend fun processDeltas(docCtx: ResourceCtx<*>, fromBeginning: Boolean) = withContext(Dispatchers.Default) {
     val ctx = ORIContext.getCtx()
     val threadCount = Integer.parseInt(ctx.config.getProperty("ori.api.threadCount"))
     try {
@@ -38,7 +39,9 @@ fun processDeltas(docCtx: DocumentCtx, fromBeginning: Boolean) = runBlocking {
 
         val records = produceDeltas(consumer)
 
-        repeat(threadCount) { consumeDeltas(docCtx, records) }
+        val jobs = ArrayList<Job>()
+        repeat(threadCount) { jobs.add(consumeDeltasAsync(docCtx, records)) }
+        jobs.forEach { job -> job.join() }
     } catch (e: Exception) {
         println("Fatal error occurred: ${e.message}")
         e.printStackTrace()
@@ -47,19 +50,25 @@ fun processDeltas(docCtx: DocumentCtx, fromBeginning: Boolean) = runBlocking {
 }
 
 @ExperimentalCoroutinesApi
-private fun CoroutineScope.produceDeltas(consumer: KafkaConsumer<String, String>): ReceiveChannel<ConsumerRecord<String, String>> =
-    produce {
-        while (true) {
-            for (record in consumer.poll(Duration.ofMillis(0))) {
-                send(record)
-                delay(100)
-            }
+private fun CoroutineScope.produceDeltas(
+    consumer: KafkaConsumer<String, String>
+): ReceiveChannel<ConsumerRecord<String, String>> = produce {
+    while (true) {
+        val records = consumer.poll(Duration.ofMillis(5))
+        for (record in records) {
+            send(record)
         }
+        delay(100)
     }
+}
 
-private fun CoroutineScope.consumeDeltas(docCtx: DocumentCtx, channel: ReceiveChannel<ConsumerRecord<String, String>>) =
-    launch {
-        for (record in channel) {
-            launch { DeltaProcessor(docCtx.copy(record = record)).process() }
+private fun CoroutineScope.consumeDeltasAsync(
+    docCtx: ResourceCtx<*>,
+    channel: ReceiveChannel<ConsumerRecord<String, String>>
+) = launch {
+    for (record in channel) {
+        supervisorScope {
+            DeltaProcessor(docCtx.copy(record = record)).process()
         }
     }
+}

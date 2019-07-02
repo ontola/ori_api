@@ -1,5 +1,5 @@
 /*
- * ORI API
+ * ActivityStreams
  * Copyright (C), Argu BV
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,91 +16,90 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package io.ontola.ori.api
+package io.ontola.activitystreams.collection.filesystem
 
 import io.ontola.activitystreams.*
 import io.ontola.activitystreams.Collection
 import io.ontola.activitystreams.vocabulary.AS
-import io.ontola.rdfUtils.createIRI
+import io.ontola.ori.api.ORio
+import io.ontola.ori.api.ensureDirectoryTree
+import io.ontola.ori.api.formatExtension
+import io.ontola.ori.api.recreateSymbolicLink
 import org.eclipse.rdf4j.model.IRI
 import org.eclipse.rdf4j.model.Model
 import org.eclipse.rdf4j.model.Resource
 import org.eclipse.rdf4j.rio.RDFFormat
 import java.io.File
-import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.math.floor
 
-class ActivityStream(private val docCtx: DocumentCtx) {
-    /** Formats in which the Activity Stream is serialized */
-    private val fileTypes = listOf(ORio.ACTIVITY_JSONLD, RDFFormat.NQUADS)
-
-    /** Directory where the Activity Stream data is stored */
-    private val asDirectory = File(docCtx.dir().path + "/activity")
-
-    /** Main file where the entire streams' Collection is stored */
-    private fun streamFile(fileType: RDFFormat? = null) =
-        File("${asDirectory.path}/${docCtx.id()}${formatExtension(fileType)}")
-
-    /** Symlink to resolve the stream via content-negotiation */
-    private fun streamLink(fileType: RDFFormat? = null) =
-        File("${docCtx.dir().path}/${docCtx.id()}${formatExtension(fileType)}")
-
-    /** Symlink to the first page of the collection */
-    private fun firstLink(fileType: RDFFormat? = null) =
-        File("${asDirectory.path}/first${formatExtension(fileType)}")
-
-    /** Symlink to the last page of the collection */
-    private fun lastLink(fileType: RDFFormat? = null) =
-        File("${asDirectory.path}/last${formatExtension(fileType)}")
-
-    private val items = ArrayList<ASObject>()
-    private val pageSize = 100
-
-    init {
-        ensure()
-        load()
+inline fun <reified T : ASObject> PaginatedFilesystemCollection<T>.loadWithType() {
+    if (!location.exists()) {
+        return
     }
 
-    /** Add an event to the activity stream. */
-    fun append(event: Event) {
-        val eventActivity = Activity(
-            type = createIRI(AS.NAMESPACE, event.type.name.toLowerCase().capitalize()),
-            target = docCtx.iri,
-            published = DocumentSet.versionStringFormat.parse(docCtx.version)
-        )
-        items.add(eventActivity)
-    }
+    findPages(RDFFormat.NQUADS).forEachIndexed { i, page ->
+        val model = ORio.parseToModel(page)
+        val obj = modelToObject<T>(model, pageIRI(i + 1))
 
-    /** Adds all activities in {streamDir} to this stream */
-    fun load(streamDir: File = asDirectory) {
-        findPages(streamDir, RDFFormat.NQUADS).forEachIndexed { i, page ->
-            val model = ORio.parseToModel(page)
-            val obj = modelToObject(model, pageIRI(i + 1))
-
-            if (obj is CollectionPage) {
-                items.addAll(obj.items ?: emptyList())
+        if (obj is CollectionPage<*>) {
+            obj.items?.forEach { item ->
+                items.add(item as T)
             }
         }
     }
+}
+
+/**
+ * Implements the MutableList interface for the ActivityStreams paginated collection model
+ */
+class PaginatedFilesystemCollection<T : ASObject>(
+    val tFactory: (index: Int) -> T,
+
+    /**  */
+    val generateIRI: (path: String?) -> IRI,
+
+    /** Name of the collection, will be included in the file names */
+    val name: String,
+
+    /** Directory where the collection is stored */
+    val location: File,
+
+    private val pageSize: Int = 100,
+
+    val items: MutableList<T> = MutableList(0, tFactory)
+) : MutableList<T> by items {
+    /** Formats in which the Activity Stream is serialized */
+    private val fileTypes = listOf(ORio.ACTIVITY_JSONLD, RDFFormat.NQUADS)
+
+    /** Main file where the entire streams' Collection is stored */
+    fun collectionFile(fileType: RDFFormat? = null) =
+        File("${location.path}/$name${formatExtension(fileType)}")
+
+    /** Symlink to the first page of the collection */
+    private fun firstLink(fileType: RDFFormat? = null) =
+        File("${location.path}/first${formatExtension(fileType)}")
+
+    /** Symlink to the last page of the collection */
+    private fun lastLink(fileType: RDFFormat? = null) =
+        File("${location.path}/last${formatExtension(fileType)}")
 
     fun save() {
+        ensure()
         storeStream()
         storePages()
         updateLinks()
     }
 
-    private fun ensure(): ActivityStream {
-        ensureDirectoryTree(asDirectory)
-
-        return this
+    private fun ensure() {
+        ensureDirectoryTree(location)
     }
 
-    private fun findPages(dir: File = asDirectory, fileType: RDFFormat): Array<File> {
-        val pageMatcher = Regex("${docCtx.id()}(;page=[0-9]+)${formatExtension(fileType)}")
+    fun findPages(fileType: RDFFormat): Array<File> {
+        val pageMatcher = Regex("$name(;page=[0-9]+)${formatExtension(fileType)}")
 
-        return dir
-            .listFiles { file -> file.name.matches(pageMatcher) }
+        return location
+            .listFiles { file -> file.name.matches(pageMatcher) }!!
             .sortedArray()
     }
 
@@ -109,9 +108,9 @@ class ActivityStream(private val docCtx: DocumentCtx) {
             id = pageIRI(number),
             items = listOf(),
             totalItems = itemCount,
-            partOf = iri(),
-            first = iri(firstLink().relativeTo(asDirectory).toString()),
-            last = iri(lastLink().relativeTo(asDirectory).toString())
+            partOf = generateIRI(null),
+            first = generateIRI(firstLink().relativeTo(location).toString()),
+            last = generateIRI(lastLink().relativeTo(location).toString())
         )
         if (number > 1) {
             coll.prev = pageIRI(number - 1)
@@ -123,24 +122,16 @@ class ActivityStream(private val docCtx: DocumentCtx) {
         return objectToModel(coll)
     }
 
-    private fun iri(suffix: String = ""): IRI {
-        val iriStr = arrayOf("${docCtx.iri}/activity", suffix)
-            .filterNot(String::isNullOrBlank)
-            .joinToString("/")
-
-        return createIRI(iriStr)
+    internal fun page(number: Int): Path {
+        return File("${location.path}/${pageName(number)}").toPath()
     }
 
-    private fun page(number: Int): Path {
-        return File("${asDirectory.path}/${pageName(number)}").toPath()
-    }
-
-    private fun pageIRI(number: Int): IRI {
-        return iri(pageName(number))
+    fun pageIRI(number: Int): IRI {
+        return generateIRI(pageName(number))
     }
 
     private fun pageName(number: Int): String {
-        return "${docCtx.id()};page=$number"
+        return "$name;page=$number"
     }
 
     private fun store(basePath: Path, model: Model) {
@@ -180,48 +171,35 @@ class ActivityStream(private val docCtx: DocumentCtx) {
     }
 
     private fun storeStream() {
-        val coll = Collection(
-            id = iri(),
+        val coll = Collection<T>(
+            id = generateIRI(null),
             totalItems = items.size,
-            first = iri(firstLink().relativeTo(asDirectory).toString()),
-            last = iri(lastLink().relativeTo(asDirectory).toString())
+            first = generateIRI(firstLink().relativeTo(location).toString()),
+            last = generateIRI(lastLink().relativeTo(location).toString())
         )
         val (_, streamModel) = objectToModel(coll)
-        store(streamFile().toPath(), streamModel)
+        store(collectionFile().toPath(), streamModel)
     }
 
     private fun updateLinks() {
         for (fileType in fileTypes) {
-            val pages = findPages(asDirectory, fileType)
+            val pages = findPages(fileType)
 
             val firstPage = pages.firstOrNull()
             if (firstPage != null) {
-                if (firstLink(fileType).exists()) {
-                    firstLink(fileType).delete()
-                }
-                Files.createSymbolicLink(
+                recreateSymbolicLink(
                     firstLink(fileType).toPath(),
-                    firstPage.relativeTo(asDirectory).toPath()
+                    firstPage.relativeTo(location).toPath()
                 )
             }
 
             val lastPage = pages.lastOrNull()
             if (lastPage != null) {
-                if (lastLink(fileType).exists()) {
-                    lastLink(fileType).delete()
-                }
-                Files.createSymbolicLink(
+                recreateSymbolicLink(
                     lastLink(fileType).toPath(),
-                    lastPage.relativeTo(asDirectory).toPath()
+                    lastPage.relativeTo(location).toPath()
                 )
             }
-
-        }
-        if (!streamLink(ORio.ACTIVITY_JSONLD).exists()) {
-            Files.createSymbolicLink(
-                streamLink(ORio.ACTIVITY_JSONLD).toPath(),
-                streamFile(ORio.ACTIVITY_JSONLD).relativeTo(docCtx.dir()).toPath()
-            )
         }
     }
 }

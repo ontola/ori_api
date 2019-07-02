@@ -16,13 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import io.kotlintest.specs.*
-import java.io.File
+package io.ontola.testhelpers
 
-class DocumentSetTest : StringSpec({
-    "::findLatestDocument" {
-        "should select the latest version" {
-            it.baseDir() shouldBe File("")
-        }
+import io.ontola.rdf4j.ResourceModel
+import io.ontola.rdf4j.model
+import io.ontola.rdfUtils.createIRI
+
+fun testModel(id: String, init: (ResourceModel.() -> Unit)): ResourceModel {
+    return model {
+        iri = createIRI("http://id.openraadsinformatie.nl/$id")
+        defaultContext = createIRI("http://purl.org/link-lib/supplant")
+
+        init()
     }
-})
+}

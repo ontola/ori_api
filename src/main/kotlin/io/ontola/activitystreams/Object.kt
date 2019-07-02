@@ -20,71 +20,75 @@ package io.ontola.activitystreams
 
 import io.ontola.activitystreams.vocabulary.AS
 import org.eclipse.rdf4j.model.Resource
+import java.time.Duration
 import java.util.*
 
+/**
+ * Note that unused fields are incorrectly defined as `Any?`
+ */
 interface ASObject : JSONLDResource {
-    var attachment: String?
-    var attributedTo: String?
-    var audience: String?
+    var attachment: Collection<ASObject>?
+    var attributedTo: Collection<ASObject>?
+    var audience: ASObject?
     var content: String?
     var context: String?
-    var contentMap: String?
+    var contentMap: Any?
     var name: String?
-    var nameMap: String?
-    var endTime: String?
-    var generator: String?
-    var icon: String?
-    var image: String?
-    var inReplyTo: String?
-    var location: String?
-    var preview: String?
+    var nameMap: Any?
+    var endTime: Date?
+    var generator: ASObject?
+    var icon: ASObject?
+    var image: Collection<ASObject>?
+    var inReplyTo: ASObject?
+    var location: ASObject?
+    var preview: ASObject?
     var published: Date?
-    var replies: String?
-    var startTime: String?
+    var replies: Collection<ASObject>?
+    var startTime: Date?
     var summary: String?
-    var summaryMap: String?
-    var tag: String?
-    var updated: String?
-    var url: String?
-    var to: String?
-    var bto: String?
-    var cc: String?
-    var bcc: String?
+    var summaryMap: Any?
+    var tag: Collection<ASObject>?
+    var updated: Date?
+    var url: Resource?
+    var to: Resource?
+    var bto: Resource?
+    var cc: Resource?
+    var bcc: Resource?
     var mediaType: String?
-    var duration: String?
+    var duration: Duration?
 }
 
 data class Object(
     override var id: Resource? = null,
     override var type: Resource? = AS.OBJECT,
 
-    override var attachment: String? = null,
-    override var attributedTo: String? = null,
-    override var audience: String? = null,
+    override var attachment: Collection<ASObject>? = null,
+    override var attributedTo: Collection<ASObject>? = null,
+    override var audience: ASObject? = null,
     override var content: String? = null,
     override var context: String? = null,
-    override var contentMap: String? = null,
+    override var contentMap: Any? = null,
     override var name: String? = null,
-    override var nameMap: String? = null,
-    override var endTime: String? = null,
-    override var generator: String? = null,
-    override var icon: String? = null,
-    override var image: String? = null,
-    override var inReplyTo: String? = null,
-    override var location: String? = null,
-    override var preview: String? = null,
+    override var nameMap: Any? = null,
+    override var endTime: Date? = null,
+    override var generator: ASObject? = null,
+    override var icon: ASObject? = null,
+    override var image: Collection<ASObject>? = null,
+    override var inReplyTo: ASObject? = null,
+    override var location: ASObject? = null,
+    override var preview: ASObject? = null,
     override var published: Date? = null,
-    override var replies: String? = null,
-    override var startTime: String? = null,
+    override var replies: Collection<ASObject>? = null,
+    override var startTime: Date? = null,
     override var summary: String? = null,
-    override var summaryMap: String? = null,
-    override var tag: String? = null,
-    override var updated: String? = null,
-    override var url: String? = null,
-    override var to: String? = null,
-    override var bto: String? = null,
-    override var cc: String? = null,
-    override var bcc: String? = null,
+    override var summaryMap: Any? = null,
+    override var tag: Collection<ASObject>? = null,
+    override var updated: Date? = null,
+    override var url: Resource? = null,
+    override var to: Resource? = null,
+    override var bto: Resource? = null,
+    override var cc: Resource? = null,
+    override var bcc: Resource? = null,
     override var mediaType: String? = null,
-    override var duration: String? = null
+    override var duration: Duration? = null
 ) : ASObject

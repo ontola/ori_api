@@ -18,14 +18,13 @@
 
 package io.ontola.ori.api
 
-import com.github.jsonldjava.core.RDFDataset
+import io.ontola.ori.api.context.ResourceCtx
 import org.eclipse.rdf4j.RDF4JException
 import org.eclipse.rdf4j.model.IRI
 import org.eclipse.rdf4j.model.Model
-import org.eclipse.rdf4j.model.Resource
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
-import org.eclipse.rdf4j.model.impl.SimpleValueFactory
 import org.eclipse.rdf4j.model.util.Models
+import org.eclipse.rdf4j.model.vocabulary.VCARD4
 import org.eclipse.rdf4j.rio.RDFFormat
 import org.zeroturnaround.zip.ZipUtil
 import java.io.File
@@ -38,12 +37,12 @@ import java.nio.file.attribute.PosixFilePermissions
  * A resource in the ORI API.
  */
 class Document(
-    private val docCtx: DocumentCtx,
-    private val data: Model,
+    private val docCtx: ResourceCtx<*>,
+    internal val data: Model,
     private val baseDir: File
 ) {
     companion object {
-        fun findExisting(docCtx: DocumentCtx, timestamp: String, baseDir: File): Document {
+        fun findExisting(docCtx: ResourceCtx<*>, timestamp: String, baseDir: File): Document {
             val d = Document(docCtx.copy(version = timestamp), LinkedHashModel(), baseDir)
             d.read()
             return d
@@ -68,10 +67,17 @@ class Document(
 
     val organization: IRI?
         get() {
-            val hasOrgName = RDFDataset.IRI("http://www.w3.org/2006/vcard/ns#hasOrganizationName")
-            return data
+            val hasOrgName = VCARD4.HAS_ORGANIZATION_NAME
+            val org = data
                 .find { s -> s.predicate == hasOrgName }
-                ?.`object` as IRI?
+                ?.`object`
+                ?: return null
+
+            if (org !is IRI) {
+                throw Exception("vcard4:hasOrganizationName is blank node or literal with value '$org'")
+            }
+
+            return org
         }
 
     fun archive() {
@@ -95,7 +101,7 @@ class Document(
         return File(String.format("%s/%s", baseDir.absolutePath, version))
     }
 
-    fun save() {
+    fun save(): Document {
         println("Writing subject '$iri' with version '$version'")
 
         try {
@@ -104,6 +110,8 @@ class Document(
             EventBus.getBus().publishError(docCtx, e)
         }
         serialize()
+
+        return this
     }
 
     /**

@@ -22,6 +22,8 @@ import org.eclipse.rdf4j.rio.RDFFormat
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.attribute.FileAttribute
 import java.nio.file.attribute.PosixFilePermissions
 
 internal fun ensureDirectoryTree(filePath: File) {
@@ -45,4 +47,16 @@ internal fun formatExtension(format: RDFFormat?): String {
     }
 
     return ".${format.defaultFileExtension}"
+}
+
+internal fun recreateSymbolicLink(
+    link: Path,
+    target: Path,
+    vararg attrs: FileAttribute<*>?
+) {
+    val from = link.toFile()
+    if (from.exists()) {
+        from.delete() || throw Exception("Couldn't delete file $from")
+    }
+    Files.createSymbolicLink(link, target, *attrs)
 }

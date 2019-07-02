@@ -18,14 +18,18 @@
 
 package io.ontola.ori.api
 
+import io.ontola.ori.api.context.ResourceCtx
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.eclipse.rdf4j.model.*
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 import java.util.*
 
+private typealias PartitionMap = HashMap<Resource, List<Statement>>
+private typealias PartitionEntry = Map.Entry<Resource, List<Statement>>
+
 class DeltaEvent(
-    private val docCtx: DocumentCtx,
+    private val docCtx: ResourceCtx<*>,
     override val data: Model = LinkedHashModel()
 ) : Event(EventType.DELTA, null, null, data) {
     private val config: Properties = ORIContext.getCtx().config
@@ -55,10 +59,18 @@ class DeltaEvent(
     }
 
     /** Partitions a delta into separately processable slices. */
-    private fun partition(): MutableCollection<DocumentSet> {
-        val partitions = HashMap<Resource, List<Statement>>()
+    internal fun partition(): Collection<DocumentSet> {
+        val subjectBuckets = this.splitBySubject(data)
+        val forest = partitionPerDocument(subjectBuckets)
+
+        return forest.values
+    }
+
+    private fun splitBySubject(model: Model): PartitionMap {
+        val partitions = PartitionMap()
+
         // TODO: implement an RDFHandler which does this while parsing
-        for (s: Statement in data) {
+        for (s: Statement in model) {
             if (!s.context?.toString().equals(config.getProperty("ori.api.supplantIRI"))) {
                 printlnWithThread("Expected supplant statement, got %s", s.context)
                 continue
@@ -72,38 +84,45 @@ class DeltaEvent(
             }
         }
 
-        val forest = HashMap<String, DocumentSet>()
-        while (partitions.isNotEmpty()) {
-            val removals = ArrayList<Resource>()
-            for ((key, value) in partitions) {
-                if (key is BNode) {
-                    val delta = forest.values.find { event -> event.anyObject(key) }
-                    if (delta == null) {
-                        removals.add(key)
-                        val danglingResource = LinkedHashModel(data.filter { s -> s.subject == key })
-                        EventBus.getBus().publishError("dangling-resource", danglingResource, null)
-                        continue
-                    }
-                    value.forEach { stmt -> delta.deltaAdd(stmt) }
-                    removals.add(key)
-                } else if (!forest.containsKey(key.stringValue())) {
-                    val store = DocumentSet(docCtx.copy(iri = key as IRI))
-                    for (statement in value) {
-                        if (statement.`object` is BNode) {
-                            val nodeData = statement.getObject()
-                            if (nodeData != null) {
-                                partitions[nodeData]!!.forEach { bStmt -> store.deltaAdd(bStmt) }
-                            }
-                        }
-                        store.deltaAdd(statement)
-                    }
-                    forest[key.stringValue()] = store
-                    removals.add(key)
+        return partitions
+    }
+
+    /** Organizes anonymous resources into the bucket which refers to them */
+    private fun partitionPerDocument(buckets: PartitionMap): Map<IRI, DocumentSet> {
+        val bNodeForestReferences = HashMap<BNode, IRI>()
+
+        val forests = buckets
+            .filterKeys { key -> key is IRI }
+            .map { bucket ->
+                val iri = bucket.key as IRI
+                val docSet = DocumentSet(docCtx.copy(iri = iri))
+                bucket.value.forEach { statement ->
+                    val obj = statement.`object`
+                    if (obj is BNode) bNodeForestReferences[obj] = statement.subject as IRI
+
+                    docSet.deltaAdd(statement)
+                }
+
+                iri to docSet
+            }
+            .toMap()
+
+        buckets
+            .filterKeys { key -> key is BNode }
+            .forEach { bucket ->
+                val homeForest = bNodeForestReferences[bucket.key]
+                if (homeForest == null) {
+                    handleDanglingNode(bucket)
+                } else {
+                    forests[homeForest]!!.addAll(bucket.value)
                 }
             }
-            removals.forEach { r -> partitions.remove(r) }
-        }
 
-        return forest.values
+        return forests
+    }
+
+    private fun handleDanglingNode(bucket: PartitionEntry) {
+        val danglingResource = LinkedHashModel(data.filter { s -> s.subject == bucket.key })
+        EventBus.getBus().publishError("dangling-resource", danglingResource, null)
     }
 }

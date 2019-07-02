@@ -18,6 +18,7 @@
 
 package io.ontola.ori.api
 
+import io.ontola.ori.api.context.ResourceCtx
 import org.eclipse.rdf4j.model.Model
 import org.eclipse.rdf4j.model.Resource
 import org.eclipse.rdf4j.model.Statement
@@ -29,15 +30,20 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class DocumentSet(
-    private val docCtx: DocumentCtx,
+    private val docCtx: ResourceCtx<*>,
     private val delta: Model = LinkedHashModel()
 ) {
     private val iri = docCtx.iri!!
     private val baseDir = docCtx.dir()
+    internal val lock = createLock(docCtx.dir())
 
     companion object {
         val versionStringFormat = SimpleDateFormat("yyyyMMdd'T'HHmm")
         val versionStringMatcher = Regex("\\d{8}T\\d{4}")
+    }
+
+    fun addAll(s: List<Statement>): Boolean {
+        return delta.addAll(s)
     }
 
     fun deltaAdd(s: Statement): Boolean {
@@ -48,42 +54,41 @@ class DocumentSet(
         return delta.any { stmt -> stmt.`object` == o }
     }
 
-    fun process() {
-        println("Processing deltaevent, $iri")
-        try {
-            ensureDirectoryTree(baseDir)
-        } catch (e: Exception) {
-            EventBus.getBus().publishError(docCtx, e)
-            return
-        }
-        val latestVersion = findLatestDocument()
-        val newVersion = initNewVersion()
+    suspend fun process() {
+        lock.withLock {
+            try {
+                ensureDirectoryTree(baseDir)
+            } catch (e: Exception) {
+                EventBus.getBus().publishError(docCtx, e)
+                return@withLock
+            }
+            val latestVersion = findLatestDocument()
+            val newVersion = initNewVersion()
 
-        val eventType = when {
-            latestVersion == null -> EventType.CREATE
-            latestVersion != newVersion -> EventType.UPDATE
-            else -> return
-        }
-        val event = Event(eventType, iri, newVersion.organization, null)
+            val eventType = when {
+                latestVersion == null -> EventType.CREATE
+                latestVersion != newVersion -> EventType.UPDATE
+                else -> return@withLock
+            }
+            val org = try {
+                newVersion.organization
+            } catch (e: Exception) {
+                EventBus
+                    .getBus()
+                    .publishError(this.docCtx, e)
+                null
+            }
+            val event = Event(eventType, iri, org, newVersion.data)
 
-        newVersion.save()
-        updateActivityStream(event, newVersion, latestVersion)
-        newVersion.archive()
-        updateLatest(newVersion)
-        publishBlocking(event)
+            newVersion.save()
+            updateActivityStream(event, newVersion, latestVersion)
+            newVersion.archive()
+            updateLatest(newVersion)
+            publishBlocking(event)
+        }
     }
 
-    private fun initNewVersion(): Document {
-        val versionStamp = versionStringFormat.format(Date())
-
-        return Document(
-            docCtx.copy(version = versionStamp),
-            delta,
-            baseDir
-        )
-    }
-
-    private fun findLatestDocument(): Document? {
+    internal fun findLatestDocument(): Document? {
         val timestampMatcher = versionStringMatcher
 
         val version = baseDir
@@ -96,6 +101,16 @@ class DocumentSet(
         }
 
         return Document.findExisting(docCtx, version, baseDir)
+    }
+
+    internal fun initNewVersion(): Document {
+        val versionStamp = versionStringFormat.format(Date())
+
+        return Document(
+            docCtx.copy(version = versionStamp),
+            delta,
+            baseDir
+        )
     }
 
     /** Publish an action to the bus for further processing */
@@ -115,7 +130,6 @@ class DocumentSet(
                 latestDir.toPath(),
                 nextLatest.dir().relativeTo(baseDir).toPath()
             )
-            println("Made ${nextLatest.version} latest")
         } catch (e: IOException) {
             EventBus.getBus().publishError(
                 docCtx,
@@ -127,9 +141,10 @@ class DocumentSet(
     private fun updateActivityStream(event: Event, newVersion: Document, oldVersion: Document?) {
         val ctx = docCtx.copy(version = newVersion.version)
         try {
-            val stream = ActivityStream(ctx)
+            val stream = DocumentActivityStream(ctx)
             if (oldVersion != null) {
-                stream.load(oldVersion.asDir())
+                val oldStream = DocumentActivityStream(docCtx)
+                stream.load(oldStream)
             }
             stream.append(event)
             stream.save()

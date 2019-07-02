@@ -18,11 +18,12 @@
 
 package io.ontola.ori.api
 
+import io.ontola.ori.api.context.ResourceCtx
 import org.apache.kafka.clients.producer.ProducerRecord
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 
-class ErrorEvent(private val docCtx: DocumentCtx, private val e: Exception) :
+class ErrorEvent(private val docCtx: ResourceCtx<*>, private val e: Exception) :
     Event(EventType.ERROR, docCtx.iri, null, null) {
 
     override fun toRecord(): ProducerRecord<String, String> {
@@ -32,21 +33,21 @@ class ErrorEvent(private val docCtx: DocumentCtx, private val e: Exception) :
             e.message
         )
         if (docCtx.cmd != null) {
-            error.headers().add("cmd", docCtx.cmd.toByteArray())
+            error.headers().add("cmd", docCtx.cmd!!.toByteArray())
         }
 
         if (docCtx.record != null) {
-            val record = docCtx.record
+            val record = docCtx.record!!
             val recordKey = "tpt-${record.topic()}-${record.partition()}-${record.timestamp()}"
             error.headers().add("recordKey", recordKey.toByteArray())
         }
 
         if (docCtx.iri != null) {
-            error.headers().add("iri", docCtx.iri.stringValue().toByteArray())
+            error.headers().add("iri", docCtx.iri!!.stringValue().toByteArray())
         }
 
         if (docCtx.version != null) {
-            error.headers().add("version", docCtx.version.toByteArray())
+            error.headers().add("version", docCtx.version!!.toByteArray())
         }
 
         val stackTrace = ByteArrayOutputStream()

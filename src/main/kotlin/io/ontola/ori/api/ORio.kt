@@ -22,10 +22,7 @@ import com.github.jsonldjava.core.JsonLdConsts
 import org.eclipse.rdf4j.model.Model
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 import org.eclipse.rdf4j.rio.*
-import org.eclipse.rdf4j.rio.helpers.BasicWriterSettings
-import org.eclipse.rdf4j.rio.helpers.JSONLDMode
-import org.eclipse.rdf4j.rio.helpers.JSONLDSettings
-import org.eclipse.rdf4j.rio.helpers.StatementCollector
+import org.eclipse.rdf4j.rio.helpers.*
 import java.io.*
 import java.nio.charset.StandardCharsets
 
@@ -123,6 +120,9 @@ class ORio(private val writer: RDFWriter) : RDFWriter by writer {
         private fun parseToModel(format: RDFFormat = RDFFormat.NQUADS, block: ((String, RDFParser) -> Unit)): Model {
             val baseDocument = ORIContext.getCtx().config.getProperty("ori.api.baseIRI")
             val rdfParser = Rio.createParser(format)
+            rdfParser.parserConfig.set(BasicParserSettings.PRESERVE_BNODE_IDS, true)
+            rdfParser.parserConfig.set(BasicParserSettings.VERIFY_URI_SYNTAX, true)
+
             val model = LinkedHashModel()
             rdfParser.setRDFHandler(StatementCollector(model))
             block(baseDocument, rdfParser)

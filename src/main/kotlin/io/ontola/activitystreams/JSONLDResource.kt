@@ -19,8 +19,9 @@
 package io.ontola.activitystreams
 
 import org.eclipse.rdf4j.model.Resource
+import java.io.Serializable
 
-interface JSONLDResource {
+interface JSONLDResource : Serializable {
     var id: Resource?
     var type: Resource?
 }

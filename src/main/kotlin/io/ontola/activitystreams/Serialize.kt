@@ -18,7 +18,6 @@
 
 package io.ontola.activitystreams
 
-import io.ontola.ori.api.ORIContext
 import org.eclipse.rdf4j.model.*
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory
@@ -30,17 +29,8 @@ import javax.xml.datatype.XMLGregorianCalendar
 import kotlin.reflect.full.declaredMemberProperties
 
 fun objectToModel(obj: ASObject): Pair<Resource, Model> {
-    val factory = SimpleValueFactory.getInstance()
-
     val model = LinkedHashModel()
-    val baseDocument = ORIContext.getCtx().config.getProperty("ori.api.baseIRI")
-    val prefix = if (obj.id?.stringValue()?.matches(Regex("^https?://(.)*")) == true) "" else "$baseDocument/"
-    val subject =
-        if (!obj.id?.stringValue().isNullOrEmpty()) {
-            factory.createIRI("$prefix${obj.id}")
-        } else {
-            factory.createBNode()
-        }
+    val subject = constructSubject(obj.id)
 
     for (prop in obj::class.declaredMemberProperties) {
         // Setting as:id enables bugs in the json-ld serializer
@@ -53,6 +43,15 @@ fun objectToModel(obj: ASObject): Pair<Resource, Model> {
     }
 
     return Pair(subject, model)
+}
+
+internal fun constructSubject(id: Resource?): Resource {
+    val factory = SimpleValueFactory.getInstance()
+    if (id == null) {
+        return factory.createBNode()
+    }
+
+    return id
 }
 
 private fun addList(subject: Resource, predicate: IRI, list: List<*>): List<Statement> {

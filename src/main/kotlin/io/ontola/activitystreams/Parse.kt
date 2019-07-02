@@ -29,8 +29,25 @@ import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.isSubtypeOf
 
 /** Map an resource {subject} in a model to an ASObject */
-fun modelToObject(model: Model, subject: Resource): ASObject {
-    val obj = when (val typeValue = activityProp(model, subject, JSONLDResource::type)) {
+fun <T : ASObject> modelToObject(model: Model, subject: Resource): ASObject {
+    val obj = createObject<T>(model, subject)
+
+    for (prop in obj::class.declaredMemberProperties) {
+        val propValue = activityProp(model, subject, prop)
+        if (prop is KMutableProperty<*> && propValue != null) {
+            try {
+                prop.setter.call(obj, propValue)
+            } catch (e: IllegalArgumentException) {
+                println("Wrong argument '$propValue' of type '${propValue::class.qualifiedName}' for '${prop.name}'")
+            }
+        }
+    }
+
+    return obj
+}
+
+private fun <T : ASObject> createObject(model: Model, subject: Resource): ASObject {
+    return when (val typeValue = activityProp(model, subject, JSONLDResource::type)) {
         AS.ACCEPT,
         AS.ADD,
         AS.ANNOUNCE,
@@ -59,29 +76,34 @@ fun modelToObject(model: Model, subject: Resource): ASObject {
         AS.UNDO,
         AS.UPDATE,
         AS.VIEW,
-        AS.ACTIVITY -> Activity()
-        AS.COLLECTION -> Collection()
-        AS.COLLECTION_PAGE -> CollectionPage()
-        AS.OBJECT -> Object()
+        AS.ACTIVITY -> Activity(id = subject)
+
+        AS.COLLECTION -> Collection<T>(id = subject)
+
+        AS.COLLECTION_PAGE -> CollectionPage<T>(id = subject)
+
+        AS.ARTICLE,
+        AS.AUDIO,
+        AS.DOCUMENT,
+        AS.EVENT,
+        AS.IMAGE,
+        AS.NOTE,
+        AS.PAGE,
+        AS.PLACE,
+        AS.PROFILE,
+        AS.RELATIONSHIP,
+        AS.TOMBSTONE,
+        AS.VIDEO,
+        AS.OBJECT -> Object(id = subject)
+
+        null -> throw Exception("No explicit type given for $subject")
+
         else -> throw Exception("Unknown type $typeValue for $subject")
     }
-
-    for (prop in obj::class.declaredMemberProperties) {
-        val propValue = activityProp(model, subject, prop)
-        if (prop is KMutableProperty<*> && propValue != null) {
-            try {
-                prop.setter.call(obj, propValue)
-            } catch (e: IllegalArgumentException) {
-                println("Wrong argument '$propValue' of type '${propValue::class.qualifiedName}' for '${prop.name}'")
-            }
-        }
-    }
-
-    return obj
 }
 
 // Kotlin reflection constraints, see https://discuss.kotlinlang.org/t/should-add-better-support-for-ktype/1495/2
-private fun listType(): List<Object>? = TODO()
+private fun listType(): List<ASObject>? = TODO()
 
 private fun <T, R> activityProp(model: Model, subject: Resource, prop: KProperty1<T, R>): Any? {
     val propFilter = { stmt: Statement -> stmt.subject == subject && stmt.predicate == determinePredicate(prop.name) }
@@ -89,24 +111,34 @@ private fun <T, R> activityProp(model: Model, subject: Resource, prop: KProperty
     if (prop.returnType.isSubtypeOf(::listType.returnType)) {
         return model
             .filter(propFilter)
-            .map { stmt -> propToNative(model, stmt.`object`) }
+            .map { stmt -> propToNative(model, subject, stmt.`object`) }
     }
 
     val obj = model.find(propFilter)?.`object`
 
-    return propToNative(model, obj)
+    return propToNative(model, subject, obj)
 }
 
-private fun propToNative(model: Model, obj: Value?): Any? {
+private fun propToNative(model: Model, subject: Resource, obj: Value?): Any? {
     return when (obj) {
         is Literal -> literalToNative(obj)
-        is IRI -> if (Models.subjectIRIs(model).contains(obj)) modelToObject(model, obj) else obj
-        is BNode -> if (Models.subjectBNodes(model).contains(obj)) modelToObject(model, obj) else obj
+        is IRI -> {
+            if (obj != subject && Models.subjectIRIs(model).contains(obj))
+                modelToObject<ASObject>(model, obj)
+            else
+                obj
+        }
+        is BNode -> {
+            if (Models.subjectBNodes(model).contains(obj))
+                modelToObject<ASObject>(model, obj)
+            else
+                obj
+        }
         else -> obj?.stringValue()
     }
 }
 
-private fun literalToNative(literal: Literal): Any {
+internal fun literalToNative(literal: Literal): Any {
     return when (literal.datatype) {
         XMLSchema.INT,
         XMLSchema.INTEGER,

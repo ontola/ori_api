@@ -18,7 +18,7 @@
 
 package io.ontola.ori.api
 
-import com.github.jsonldjava.core.RDFDataset
+import io.ontola.ori.api.context.ResourceCtx
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -28,6 +28,7 @@ import org.apache.kafka.common.PartitionInfo
 import org.apache.kafka.common.TopicPartition
 import org.eclipse.rdf4j.model.IRI
 import org.eclipse.rdf4j.model.Model
+import org.eclipse.rdf4j.model.vocabulary.VCARD4
 import org.eclipse.rdf4j.rio.RDFFormat
 import java.io.StringWriter
 import java.time.Duration
@@ -52,8 +53,10 @@ class EventBus {
     private val ctx = ORIContext.getCtx()
     private val busProducer = KafkaProducer<String, String>(ctx.kafkaOpts)
 
-    internal fun createSubscriber(waitForConnection: Boolean = false): KafkaConsumer<String, String> {
-        val topic = ctx.config.getProperty("ori.api.kafka.topic", "ori-delta")
+    internal fun createSubscriber(
+        waitForConnection: Boolean = false,
+        topic: String = ctx.config.getProperty("ori.api.kafka.topic", "ori-delta")
+    ): KafkaConsumer<String, String> {
 
         System.out.printf(
             "Connecting to kafka on '%s' with group '%s' and topic '%s' \n",
@@ -93,7 +96,7 @@ class EventBus {
         return busProducer.send(event.toRecord())
     }
 
-    internal fun publishError(docCtx: DocumentCtx, e: Exception): Future<RecordMetadata> {
+    internal fun publishError(docCtx: ResourceCtx<*>, e: Exception): Future<RecordMetadata> {
         println("Caught error ${e.message}")
         e.printStackTrace()
         return busProducer.send(ErrorEvent(docCtx, e).toRecord())
@@ -104,14 +107,14 @@ class EventBus {
         val writer = ORio.createWriter(RDFFormat.NQUADS, payload)
         writer.handleSingleModel(value)
 
-        val record = ProducerRecord<String, String>(
+        val record = ProducerRecord(
             ctx.config.getProperty("ori.api.kafka.errorTopic"),
             type,
             payload.toString()
         )
         if (org != null) {
             record.headers().add(
-                RDFDataset.IRI("http://www.w3.org/2006/vcard/ns#hasOrganizationName").toString(),
+                VCARD4.HAS_ORGANIZATION_NAME.stringValue(),
                 org.toString().toByteArray()
             )
         }

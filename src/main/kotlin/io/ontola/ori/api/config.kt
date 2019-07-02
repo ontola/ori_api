@@ -18,6 +18,7 @@
 
 package io.ontola.ori.api
 
+import org.redisson.config.Config
 import java.util.*
 
 fun initConfig(): Properties {
@@ -25,7 +26,11 @@ fun initConfig(): Properties {
 
     config.setProperty(
         "ori.api.dataDir",
-        (System.getenv("DATA_DIR") ?: "${System.getProperty("java.io.tmpdir")}/id")
+        (System.getenv("DATA_DIR") ?: "${System.getProperty("java.io.tmpdir")}/ori/id")
+    )
+    config.setProperty(
+        "ori.api.apiDir",
+        (System.getenv("API_DIR") ?: "${System.getProperty("java.io.tmpdir")}/ori/api/v1")
     )
     config.setProperty(
         "ori.api.baseIRI",
@@ -34,6 +39,18 @@ fun initConfig(): Properties {
     config.setProperty(
         "ori.api.supplantIRI",
         (System.getenv("SUPPLANT_IRI") ?: "http://purl.org/link-lib/supplant")
+    )
+    config.setProperty(
+        "ori.api.redis.address",
+        (System.getenv("REDIS_ADDRESS") ?: "")
+    )
+    config.setProperty(
+        "ori.api.redis.hostname",
+        (System.getenv("REDIS_HOSTNAME") ?: "redis")
+    )
+    config.setProperty(
+        "ori.api.redis.port",
+        (System.getenv("REDIS_PORT") ?: "6379")
     )
     config.setProperty(
         "ori.api.kafka.clusterApiKey",
@@ -91,6 +108,8 @@ fun initKafkaConfig(config: Properties): Properties {
 
     kafkaOpts.setProperty("bootstrap.servers", config.getProperty("ori.api.kafka.address"))
     kafkaOpts.setProperty("group.id", config.getProperty("ori.api.kafka.group_id"))
+    kafkaOpts.setProperty("max.poll.records", "1")
+    kafkaOpts.setProperty("session.timeout.ms", "60000")
     kafkaOpts.setProperty("enable.auto.commit", "true")
     kafkaOpts.setProperty("auto.commit.interval.ms", "1000")
     kafkaOpts.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
@@ -117,4 +136,21 @@ fun initKafkaConfig(config: Properties): Properties {
     }
 
     return kafkaOpts
+}
+
+fun initRedisConfig(config: Properties): Config {
+    val redisOpts = Config()
+    val address =
+        if (config.getProperty("ori.api.redis.address").isNotEmpty()) {
+            config.getProperty("ori.api.redis.address")
+        } else {
+            val hostname = config.getProperty("ori.api.redis.hostname")
+            val port = config.getProperty("ori.api.redis.port")
+            "redis://$hostname:$port"
+        }
+
+    redisOpts.useSingleServer().apply {
+        this.address = address
+    }
+    return redisOpts
 }

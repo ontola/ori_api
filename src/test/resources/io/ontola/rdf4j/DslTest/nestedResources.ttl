@@ -1,0 +1,17 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix as: <https://www.w3.org/ns/activitystreams#> .
+@prefix schema: <http://schema.org/> .
+
+
+<http://example.com/attachment/1> as:author [ a schema:Person;
+      schema:name "Peter Peterson"
+    ];
+  as:href <http://example.com/attachment/1>;
+  as:name "Attachment 1" .
+
+<http://example.com/example> as:attachments <http://example.com/attachment/1>, [
+      as:name "Attachment 2 (blank node)"
+    ], [
+      as:name "Attachment 3 (blank node)"
+    ];
+  as:name "Test" .

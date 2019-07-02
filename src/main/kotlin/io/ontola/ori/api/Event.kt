@@ -18,29 +18,39 @@
 
 package io.ontola.ori.api
 
-import com.github.jsonldjava.core.RDFDataset
+import io.ontola.ori.api.context.ResourceCtx
 import io.ontola.rdfUtils.createIRI
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.eclipse.rdf4j.model.IRI
 import org.eclipse.rdf4j.model.Model
 import org.eclipse.rdf4j.model.Resource
-import java.nio.charset.Charset
+import org.eclipse.rdf4j.model.vocabulary.RDF
+import org.eclipse.rdf4j.model.vocabulary.VCARD4
+import java.nio.charset.StandardCharsets
 import java.util.*
 
 class InvalidEventException(message: String) : Exception(message)
 
-open class Event(val type: EventType, open val iri: Resource?, val org: IRI?, open val data: Model?) {
+open class Event(
+    val type: EventType,
+    open val iri: Resource?,
+    val org: IRI?,
+    open val data: Model?
+) {
     companion object {
         private val config: Properties = ORIContext.getCtx().config
-        private val deltaTopic = config.getProperty("ori.api.kafka.topic")
-        private val errorTopic = config.getProperty("ori.api.kafka.errorTopic")
-        private val updateTopic = config.getProperty("ori.api.kafka.updateTopic")
-        private val orgPredicate = RDFDataset.IRI("http://www.w3.org/2006/vcard/ns#hasOrganizationName").toString()
+        private val deltaTopic = config.getProperty("ori.api.kafka.topic") ?: throw Exception("Delta topic not set")
+        private val errorTopic =
+            config.getProperty("ori.api.kafka.errorTopic") ?: throw Exception("Error topic not set")
+        private val updateTopic =
+            config.getProperty("ori.api.kafka.updateTopic") ?: throw Exception("Update topic not set")
+        private val orgPredicate = VCARD4.HAS_ORGANIZATION_NAME.stringValue()
 
-        fun parseRecord(docCtx: DocumentCtx): Event? {
-            val record = docCtx.record!!
+        fun parseRecord(docCtx: ResourceCtx<*>): Event? {
+            val record = docCtx.record
 
-            return when (record.topic()) {
+            return when (record?.topic()) {
                 deltaTopic -> {
                     val event = ORio.parseToModel(record.value())
 
@@ -49,13 +59,19 @@ open class Event(val type: EventType, open val iri: Resource?, val org: IRI?, op
                 errorTopic -> {
                     TODO()
                 }
-                updateTopic -> {
-                    val org = record.headers().lastHeader(orgPredicate).value().toString(Charset.defaultCharset())
-
-                    return Event(EventType.UPDATE, createIRI(record.value()), createIRI(org), null)
-                }
+                updateTopic -> parseUpdate(record)
                 else -> null
             }
+        }
+
+        fun parseUpdate(record: ConsumerRecord<String, String>): Event {
+            val org = record
+                .headers()
+                .lastHeader(orgPredicate)
+                .value()
+                .toString(StandardCharsets.UTF_8)
+
+            return Event(EventType.UPDATE, createIRI(record.value()), createIRI(org), null)
         }
     }
 
@@ -71,10 +87,18 @@ open class Event(val type: EventType, open val iri: Resource?, val org: IRI?, op
         )
         if (org != null) {
             record.headers().add(
-                RDFDataset.IRI("http://www.w3.org/2006/vcard/ns#hasOrganizationName").toString(),
+                VCARD4.HAS_ORGANIZATION_NAME.stringValue(),
                 org.toString().toByteArray()
             )
         }
+        this.data
+            ?.find { s -> s.subject == iri && s.predicate == RDF.TYPE }
+            ?.let {
+                record.headers().add(
+                    RDF.TYPE.stringValue(),
+                    it.`object`.toString().toByteArray()
+                )
+            }
 
         return record
     }

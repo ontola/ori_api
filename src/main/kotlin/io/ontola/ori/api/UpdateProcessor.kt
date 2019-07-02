@@ -18,12 +18,71 @@
 
 package io.ontola.ori.api
 
+import io.ontola.activitystreams.Activity
+import io.ontola.activitystreams.vocabulary.AS
+import io.ontola.ori.api.context.CtxProps
+import io.ontola.ori.api.context.DocumentCtx
+import io.ontola.rdfUtils.createIRI
+import io.ontola.rdfUtils.tryCreateIRI
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.eclipse.rdf4j.model.vocabulary.ORG
+import org.eclipse.rdf4j.model.vocabulary.RDF
+import org.eclipse.rdf4j.model.vocabulary.VCARD4
+import java.nio.charset.StandardCharsets
 
 class UpdateProcessor(
     private val record: ConsumerRecord<String, String>
 ) {
-    fun process() {
+    suspend fun process() {
+        println("Process update: ${record.key()}, ${record.value()}")
+        processHasOrganizationName(record)
+        processType(record)
+    }
 
+    private suspend fun processHasOrganizationName(record: ConsumerRecord<String, String>) {
+        record
+            .headers()
+            .lastHeader(VCARD4.HAS_ORGANIZATION_NAME.stringValue())
+            ?.value()
+            ?.toString(StandardCharsets.UTF_8)
+            ?.let { tryCreateIRI(it) }
+            ?.let {
+                val docCtx = DocumentCtx(
+                    CtxProps(
+                        record = record,
+                        iri = it
+                    )
+                )
+                val docSet = DocumentSet(docCtx)
+                val latest = docSet.findLatestDocument() ?: docSet.initNewVersion().save()
+                val orgAS = DocumentActivityStream(docCtx.copy(version = latest.version))
+                createLock(docCtx.dir()).withLock {
+                    orgAS.append(
+                        Activity(
+                            type = AS.ADD,
+                            `object` = createIRI(record.value()),
+                            target = it
+                        )
+                    )
+                    orgAS.save()
+                }
+            }
+    }
+
+    private suspend fun processType(record: ConsumerRecord<String, String>) {
+        record
+            .headers()
+            .lastHeader(RDF.TYPE.stringValue())
+            ?.value()
+            ?.toString(StandardCharsets.UTF_8)
+            ?.let { tryCreateIRI(it) }
+            ?.takeIf { it == ORG.ORGANIZATION }
+            ?.let {
+                OrganizationsSet.withLock {
+                    val organizations = OrganizationsSet()
+                    organizations.add(createIRI(record.value()))
+                    organizations.save()
+                }
+            }
     }
 }

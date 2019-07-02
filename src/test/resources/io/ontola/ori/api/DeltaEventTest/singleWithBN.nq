@@ -1,0 +1,6 @@
+<http://id.openraadsinformatie.nl/10> <http://schema.org/name> "Test" <http://purl.org/link-lib/supplant> .
+<http://id.openraadsinformatie.nl/10> <http://schema.org/creator> _:123 <http://purl.org/link-lib/supplant> .
+<http://id.openraadsinformatie.nl/10> <http://www.w3.org/2006/vcard/ns#hasOrganizationName> <http://example.com/10> <http://purl.org/link-lib/supplant> .
+<http://id.openraadsinformatie.nl/10> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/org#Organization> <http://purl.org/link-lib/supplant> .
+_:123 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://schema.org/Person> <http://purl.org/link-lib/supplant> .
+_:123 <http://schema.org/name> "P. Person" <http://purl.org/link-lib/supplant> .

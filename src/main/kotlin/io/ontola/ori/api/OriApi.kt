@@ -18,7 +18,11 @@
 
 package io.ontola.ori.api
 
+import io.ontola.ori.api.context.CtxProps
+import io.ontola.ori.api.context.DocumentCtx
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.security.MessageDigest
@@ -29,11 +33,10 @@ import kotlin.system.exitProcess
 /**
  * Listens to kafka streams and processes delta streams into the file system.
  *
- * TODO: Add activity streams to allow viewing which resources have changed
  * TODO: Add error handling service
  */
 @ExperimentalCoroutinesApi
-fun main(args: Array<String>) = runBlocking<Unit> {
+fun main(args: Array<String>) = runBlocking {
     val ctx = ORIContext.getCtx()
 
     printInitMessage(ctx.config)
@@ -52,9 +55,17 @@ fun main(args: Array<String>) = runBlocking<Unit> {
         }
         else -> {
             val cmd = arrayListOf("processDeltas", primaryFlag).joinToString(" ")
-            processDeltas(DocumentCtx(cmd), primaryFlag == "--from-beginning")
+            val deltas = launch(coroutineContext) {
+                processDeltas(DocumentCtx(CtxProps(cmd)), primaryFlag == "--from-beginning")
+            }
+
+            val updates = processUpdates()
+
+            joinAll(deltas, updates)
         }
     }
+
+    joinAll()
 }
 
 fun ensureOutputFolder(settings: Properties) {

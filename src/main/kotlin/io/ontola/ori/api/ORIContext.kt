@@ -18,6 +18,7 @@
 
 package io.ontola.ori.api
 
+import org.redisson.config.Config
 import java.util.*
 
 /**
@@ -25,14 +26,19 @@ import java.util.*
  */
 data class ORIContext(
     internal val config: Properties,
-    internal val kafkaOpts: Properties
+    internal val kafkaOpts: Properties,
+    internal val redis: Config
 ) {
     companion object {
         private val context: ORIContext
 
         init {
             val config = initConfig()
-            context = ORIContext(config, initKafkaConfig(config))
+            context = ORIContext(
+                config,
+                initKafkaConfig(config),
+                initRedisConfig(config)
+            )
         }
 
         fun getCtx(): ORIContext {

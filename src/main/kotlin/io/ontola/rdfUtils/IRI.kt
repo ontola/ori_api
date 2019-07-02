@@ -27,6 +27,14 @@ fun createIRI(iri: String): IRI {
     return factory.createIRI(iri)
 }
 
+fun tryCreateIRI(iri: String): IRI? {
+    return try {
+        factory.createIRI(iri)
+    } catch (e: Exception) {
+        null
+    }
+}
+
 fun createIRI(ns: String, term: String): IRI {
     return factory.createIRI("$ns$term")
 }
