@@ -68,7 +68,7 @@ private fun CoroutineScope.consumeDeltasAsync(
 ) = launch {
     for (record in channel) {
         supervisorScope {
-            DeltaProcessor(docCtx.copy(record = record)).process()
+            DeltaMessageProcessor(docCtx.copy(record = record)).process()
         }
     }
 }

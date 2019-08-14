@@ -20,7 +20,7 @@ package io.ontola.ori.api
 
 import io.ontola.ori.api.context.ResourceCtx
 
-class DeltaProcessor(private val docCtx: ResourceCtx<*>) {
+class DeltaMessageProcessor(private val docCtx: ResourceCtx<*>) {
     private val record = docCtx.ctx.record
 
     fun process() {
