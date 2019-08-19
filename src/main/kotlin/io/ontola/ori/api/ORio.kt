@@ -190,6 +190,7 @@ class ORio(private val writer: RDFWriter) : RDFWriter by writer {
             nsMap["http://www.iana.org/assignments/link-relations/"] = "ianalr"
             nsMap["http://www.w3.org/2007/ont/link#"] = "link"
             nsMap["http://purl.org/link-lib/"] = "ll"
+            nsMap["http://purl.org/linked-delta/"] = "ld"
             nsMap["https://argu.co/voc/mapping/"] = "mapping"
             nsMap["https://argu.co/ns/meeting/"] = "meeting"
             nsMap["http://www.semanticdesktop.org/ontologies/2007/04/02/ncal#"] = "ncal"

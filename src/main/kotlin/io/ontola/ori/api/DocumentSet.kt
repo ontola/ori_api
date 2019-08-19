@@ -104,6 +104,7 @@ class DocumentSet(
     }
 
     internal fun initNewVersion(): Document {
+        // TODO: pass the old verion to kickstart, then apply the delta
         val versionStamp = versionStringFormat.format(Date())
 
         return Document(

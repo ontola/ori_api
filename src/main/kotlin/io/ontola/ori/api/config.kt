@@ -38,7 +38,7 @@ fun initConfig(): Properties {
     )
     config.setProperty(
         "ori.api.supplantIRI",
-        (System.getenv("SUPPLANT_IRI") ?: "http://purl.org/link-lib/supplant")
+        (System.getenv("SUPPLANT_IRI") ?: "http://purl.org/linked-delta/supplant")
     )
     config.setProperty(
         "ori.api.redis.address",

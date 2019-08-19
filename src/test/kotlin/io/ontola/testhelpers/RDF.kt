@@ -25,7 +25,7 @@ import io.ontola.rdfUtils.createIRI
 fun testModel(id: String, init: (ResourceModel.() -> Unit)): ResourceModel {
     return model {
         iri = createIRI("http://id.openraadsinformatie.nl/$id")
-        defaultContext = createIRI("http://purl.org/link-lib/supplant")
+        defaultContext = createIRI("http://purl.org/linked-delta/supplant")
 
         init()
     }
