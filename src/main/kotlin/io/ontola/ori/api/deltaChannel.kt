@@ -45,6 +45,7 @@ suspend fun processDeltas(docCtx: ResourceCtx<*>, fromBeginning: Boolean) = with
     } catch (e: Exception) {
         println("Fatal error occurred: ${e.message}")
         e.printStackTrace()
+        ORIContext.notify(e)
         exitProcess(1)
     }
 }

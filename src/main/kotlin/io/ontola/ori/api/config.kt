@@ -92,6 +92,10 @@ fun initConfig(): Properties {
         "ori.api.threadCount",
         System.getenv("THREAD_COUNT") ?: "4"
     )
+    config.setProperty(
+        "ori.api.bugsnagKey",
+        System.getenv("BUGSNAG_KEY") ?: ""
+    )
     val hostname = config.getProperty("ori.api.kafka.hostname")
     val port = config.getProperty("ori.api.kafka.port")
     var address = config.getProperty("ori.api.kafka.address")

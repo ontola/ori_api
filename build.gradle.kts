@@ -32,6 +32,7 @@ dependencies {
     implementation("org.zeroturnaround:zt-zip:1.13")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.0-M2")
     implementation("org.redisson:redisson:3.11.1")
+    implementation("com.bugsnag:bugsnag:3.+")
 
     implementation("org.eclipse.rdf4j:rdf4j-runtime:2.5.2") {
         exclude(group = "ch.qos.logback", module = "logback-classic")

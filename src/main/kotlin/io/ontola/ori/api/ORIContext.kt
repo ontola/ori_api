@@ -18,6 +18,7 @@
 
 package io.ontola.ori.api
 
+import com.bugsnag.Bugsnag
 import org.redisson.config.Config
 import java.util.*
 
@@ -31,9 +32,12 @@ data class ORIContext(
 ) {
     companion object {
         private val context: ORIContext
+        private val bugsnag: Bugsnag
 
         init {
             val config = initConfig()
+            bugsnag = Bugsnag(config.getProperty("ori.api.bugsnagKey"))
+
             context = ORIContext(
                 config,
                 initKafkaConfig(config),
@@ -43,6 +47,10 @@ data class ORIContext(
 
         fun getCtx(): ORIContext {
             return context
+        }
+
+        fun notify(e: Throwable) {
+            bugsnag.notify(e)
         }
     }
 }

@@ -14,6 +14,7 @@ COPY --from=builder /usr/src/ori_api/build/distributions/ori_api /usr/src/ori_ap
 ENV APP_HOME "/usr/src/ori_api"
 WORKDIR /usr/src/ori_api
 
+ENV BUGSNAG_KEY ""
 ENV DELTA_TOPIC "ori-delta"
 ENV KAFKA_ADDRESS ""
 ENV KAFKA_HOSTNAME "localhost"

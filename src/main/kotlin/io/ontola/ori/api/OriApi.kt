@@ -97,6 +97,7 @@ fun getDigester(): MessageDigest {
         digester = MessageDigest.getInstance("MD5")
     } catch (e: NoSuchAlgorithmException) {
         println("[FATAL] No MD5 MessageDigest algorithm support, exiting")
+        ORIContext.notify(e)
         System.exit(1)
     }
 

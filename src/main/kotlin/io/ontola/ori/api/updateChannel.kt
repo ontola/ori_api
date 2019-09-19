@@ -46,6 +46,7 @@ suspend fun processUpdates(): Job {
         } catch (e: Exception) {
             println("Fatal error occurred: ${e.message}")
             e.printStackTrace()
+            ORIContext.notify(e)
             exitProcess(1)
         }
     }

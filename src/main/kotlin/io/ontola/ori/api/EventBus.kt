@@ -99,6 +99,7 @@ class EventBus {
     internal fun publishError(docCtx: ResourceCtx<*>, e: Exception): Future<RecordMetadata> {
         println("Caught error ${e.message}")
         e.printStackTrace()
+        ORIContext.notify(e)
         return busProducer.send(ErrorEvent(docCtx, e).toRecord())
     }
 

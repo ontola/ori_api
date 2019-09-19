@@ -61,6 +61,7 @@ class DocumentActivityStream(private val docCtx: ResourceCtx<*>) {
             collection += eventActivity
         } catch (e: Exception) {
             println(e)
+            ORIContext.notify(e)
         }
     }
 
