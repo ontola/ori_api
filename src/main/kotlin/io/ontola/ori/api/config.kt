@@ -46,7 +46,7 @@ fun initConfig(): Properties {
     )
     config.setProperty(
         "ori.api.redis.hostname",
-        (System.getenv("REDIS_HOSTNAME") ?: "redis")
+        (System.getenv("REDIS_HOSTNAME") ?: "localhost")
     )
     config.setProperty(
         "ori.api.redis.port",

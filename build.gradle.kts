@@ -51,6 +51,7 @@ dependencies {
     testImplementation("org.apache.kafka:kafka_2.11:2.2.0")
     testImplementation("org.apache.kafka:kafka_2.11:2.2.0.kafka:test")
     testImplementation("org.scala-lang:scala-library:2.11")
+    testImplementation("com.github.kstyrc:embedded-redis:0.6")
 }
 
 application {
