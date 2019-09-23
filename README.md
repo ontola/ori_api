@@ -1,5 +1,7 @@
 # ORI API
 
+Serves the REST Linked Data API for [Open Raadsinformatie](https://github.com/openstate/open-raadsinformatie/), available at `http://id.openraadsinformatie.nl`. There are other APIs available for this dataset as well ([docs](https://docs.openraadsinformatie.nl)).
+
 This program listens to a a kafka topic and converts [incoming events](https://github.com/ontola/linked-delta) into a
 serveable file system hierarchy. Multiple serialization formats and a zip file containing them all is generated for
 every incoming resource.
