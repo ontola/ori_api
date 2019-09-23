@@ -47,6 +47,10 @@ dependencies {
     // Use JUnit test framework
     testImplementation("io.kotlintest:kotlintest-runner-junit5:3.3.2")
     testImplementation("com.puppycrawl.tools:checkstyle:8.21")
+    testImplementation("org.apache.kafka:kafka-clients:2.2.0.kafka:test")
+    testImplementation("org.apache.kafka:kafka_2.11:2.2.0")
+    testImplementation("org.apache.kafka:kafka_2.11:2.2.0.kafka:test")
+    testImplementation("org.scala-lang:scala-library:2.11")
 }
 
 application {
