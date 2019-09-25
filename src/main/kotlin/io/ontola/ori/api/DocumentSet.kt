@@ -47,11 +47,7 @@ class DocumentSet(
     }
 
     fun deltaAdd(s: Statement): Boolean {
-        return delta.add(s.subject, s.predicate, s.`object`)
-    }
-
-    fun anyObject(o: Resource): Boolean {
-        return delta.any { stmt -> stmt.`object` == o }
+        return delta.add(s.subject, s.predicate, s.`object`, s.context)
     }
 
     suspend fun process() {

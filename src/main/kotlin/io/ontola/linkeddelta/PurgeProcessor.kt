@@ -17,6 +17,10 @@ class PurgeProcessor : DeltaProcessor {
     }
 
     override fun process(current: Model, delta: Model, st: Statement): DeltaProcessorResult {
-        return DeltaProcessorResult(emptyStArr, emptyStArr, emptyStArr)
+        return DeltaProcessorResult(
+            emptyStArr,
+            current.filter { s -> s.subject == st.subject },
+            emptyStArr
+        )
     }
 }

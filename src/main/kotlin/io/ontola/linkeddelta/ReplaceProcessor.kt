@@ -7,16 +7,19 @@ import org.eclipse.rdf4j.model.Statement
 /**
  * Removes all subject-predicate combinations which match the statement from the store and is added afterwards.
  */
-class ReplaceProcessor : DeltaProcessor {
+class ReplaceProcessor : BaseProcessor() {
     override val graphIRI = createIRI("http://purl.org/linked-delta/replace")
-
-    private val emptyStArr = emptyList<Statement>();
+    val supplantIRI = createIRI("http://purl.org/linked-delta/supplant")
 
     override fun match(st: Statement): Boolean {
-        return st.context == graphIRI
+        return st.context == graphIRI || st.context == supplantIRI
     }
 
     override fun process(current: Model, delta: Model, st: Statement): DeltaProcessorResult {
-        return DeltaProcessorResult(emptyStArr, emptyStArr, emptyStArr)
+        return DeltaProcessorResult(
+            emptyStArr,
+            emptyStArr,
+            statementWithoutContext(st)
+        )
     }
 }
