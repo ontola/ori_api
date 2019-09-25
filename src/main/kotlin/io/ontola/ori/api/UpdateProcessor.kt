@@ -54,7 +54,7 @@ class UpdateProcessor(
                     )
                 )
                 val docSet = DocumentSet(docCtx)
-                val latest = docSet.findLatestDocument() ?: docSet.initNewVersion().save()
+                val latest = docSet.findLatestDocument() ?: docSet.initNewVersion(null).save()
                 val orgAS = DocumentActivityStream(docCtx.copy(version = latest.version))
                 createLock(docCtx.dir()).withLock {
                     orgAS.append(

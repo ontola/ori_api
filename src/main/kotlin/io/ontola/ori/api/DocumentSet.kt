@@ -18,6 +18,8 @@
 
 package io.ontola.ori.api
 
+import io.ontola.linkeddelta.applyDelta
+import io.ontola.linkeddelta.processors
 import io.ontola.ori.api.context.ResourceCtx
 import org.eclipse.rdf4j.model.Model
 import org.eclipse.rdf4j.model.Resource
@@ -59,7 +61,7 @@ class DocumentSet(
                 return@withLock
             }
             val latestVersion = findLatestDocument()
-            val newVersion = initNewVersion()
+            val newVersion = initNewVersion(latestVersion)
 
             val eventType = when {
                 latestVersion == null -> EventType.CREATE
@@ -99,13 +101,15 @@ class DocumentSet(
         return Document.findExisting(docCtx, version, baseDir)
     }
 
-    internal fun initNewVersion(): Document {
-        // TODO: pass the old verion to kickstart, then apply the delta
+    internal fun initNewVersion(existing: Document?): Document {
         val versionStamp = versionStringFormat.format(Date())
+
+        val data = existing?.data ?: LinkedHashModel()
+        val newData = applyDelta(processors, data, delta)
 
         return Document(
             docCtx.copy(version = versionStamp),
-            delta,
+            newData,
             baseDir
         )
     }
