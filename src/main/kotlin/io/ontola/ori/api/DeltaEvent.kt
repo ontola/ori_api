@@ -37,16 +37,22 @@ class DeltaEvent(
     override fun process() {
         try {
             runBlocking {
-                for (delta in partition()) {
+                val partitions = partition()
+                printlnWithThread("Processing delta event with %s partitions \n", partitions.size)
+                for ((iri, delta) in partitions) {
                     launch {
-                        delta.process()
+                        try {
+                            delta.process()
+                        } catch(e: Exception) {
+                            printlnWithThread("Exception while processing partition %s: '%s'\n", iri, e.toString())
+                            EventBus.getBus().publishError(docCtx, e)
+                        }
                     }
                 }
             }
         } catch (e: Exception) {
-            EventBus.getBus().publishError(docCtx, e)
             printlnWithThread("Exception while parsing delta event: '%s'\n", e.toString())
-            e.printStackTrace()
+            EventBus.getBus().publishError(docCtx, e)
         }
     }
 
@@ -59,11 +65,9 @@ class DeltaEvent(
     }
 
     /** Partitions a delta into separately processable slices. */
-    internal fun partition(): Collection<DocumentSet> {
+    internal fun partition(): Map<IRI, DocumentSet> {
         val subjectBuckets = this.splitBySubject(data)
-        val forest = partitionPerDocument(subjectBuckets)
-
-        return forest.values
+        return partitionPerDocument(subjectBuckets)
     }
 
     private fun splitBySubject(model: Model): PartitionMap {
@@ -71,11 +75,6 @@ class DeltaEvent(
 
         // TODO: implement an RDFHandler which does this while parsing
         for (s: Statement in model) {
-            if (!s.context?.toString().equals(config.getProperty("ori.api.supplantIRI"))) {
-                printlnWithThread("Expected supplant statement, got %s", s.context)
-                continue
-            }
-
             val stmtList = partitions[s.subject]
             if (!stmtList.isNullOrEmpty()) {
                 partitions[s.subject] = stmtList.plus(s)
@@ -90,7 +89,6 @@ class DeltaEvent(
     /** Organizes anonymous resources into the bucket which refers to them */
     private fun partitionPerDocument(buckets: PartitionMap): Map<IRI, DocumentSet> {
         val bNodeForestReferences = HashMap<BNode, IRI>()
-
         val forests = buckets
             .filterKeys { key -> key is IRI }
             .map { bucket ->

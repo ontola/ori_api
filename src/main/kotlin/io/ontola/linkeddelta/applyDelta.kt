@@ -39,7 +39,7 @@ fun applyDelta(processors: List<DeltaProcessor>, current: Model, delta: Model): 
             replaceable.addAll(res.replaceable)
             removable.addAll(res.removable)
         } else {
-            throw Error("No processor for graph ${statement.context}")
+            throw Exception("No processor for graph ${statement.context} (statement was $statement)")
         }
     }
 

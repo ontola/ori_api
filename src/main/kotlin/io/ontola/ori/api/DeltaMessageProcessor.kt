@@ -25,7 +25,7 @@ class DeltaMessageProcessor(private val docCtx: ResourceCtx<*>) {
 
     fun process() {
         try {
-            printlnWithThread("[start][orid:${record?.timestamp()}] Processing message")
+            printlnWithThread("[at:${record?.timestamp()}][start] Processing message")
             val event = Event.parseRecord(docCtx)
             if (event == null || event.type != EventType.DELTA || event.data == null) {
                 EventBus.getBus().publishError(docCtx, InvalidEventException("Received invalid event on delta bus"))
@@ -33,7 +33,7 @@ class DeltaMessageProcessor(private val docCtx: ResourceCtx<*>) {
             }
             event.process()
 
-            printlnWithThread("[end][orid:%s] Done with message\n", record?.timestamp())
+            printlnWithThread("[at:%s][end] Done with message\n", record?.timestamp())
         } catch (e: Exception) {
             EventBus.getBus().publishError(docCtx, e)
             printlnWithThread("Exception while processing delta event: '%s'\n", e.toString())

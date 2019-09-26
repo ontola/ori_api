@@ -34,9 +34,10 @@ class UpdateProcessor(
     private val record: ConsumerRecord<String, String>
 ) {
     suspend fun process() {
-        println("Process update: ${record.key()}, ${record.value()}")
+        println("[at:${record.timestamp()}] Process update: ${record.key()}, ${record.value()}")
         processHasOrganizationName(record)
         processType(record)
+        println("[at:${record.timestamp()}] Finished processing update: ${record.key()}, ${record.value()}")
     }
 
     private suspend fun processHasOrganizationName(record: ConsumerRecord<String, String>) {

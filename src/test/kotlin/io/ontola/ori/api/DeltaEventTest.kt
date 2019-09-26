@@ -38,7 +38,7 @@ class DeltaEventTest : StringSpec({
             val event = DeltaEvent(emptyContext(), model)
             val partitioned = event.partition()
 
-            partitioned shouldHaveSize 1
+            partitioned.values shouldHaveSize 1
         }
 
         "partition single resource with blank nodes" {
@@ -51,7 +51,7 @@ class DeltaEventTest : StringSpec({
             val event = DeltaEvent(emptyContext(), model)
             val partitioned = event.partition()
 
-            partitioned shouldHaveSize 1
+            partitioned.values shouldHaveSize 1
         }
 
         "partition multiple resources" {
@@ -70,7 +70,7 @@ class DeltaEventTest : StringSpec({
             val event = DeltaEvent(emptyContext(), model)
             val partitioned = event.partition()
 
-            partitioned shouldHaveSize 3
+            partitioned.values shouldHaveSize 3
         }
     }
 })

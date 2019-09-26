@@ -53,6 +53,7 @@ class DocumentSet(
     }
 
     suspend fun process() {
+        System.out.printf("[at:%s][orid:%s] starting processing\n", docCtx.record?.timestamp(), docCtx.id)
         lock.withLock {
             try {
                 ensureDirectoryTree(baseDir)
@@ -84,6 +85,7 @@ class DocumentSet(
             updateLatest(newVersion)
             publishBlocking(event)
         }
+        System.out.printf("[at:%s][orid:%s] finished processing\n", docCtx.record?.timestamp(), docCtx.id)
     }
 
     internal fun findLatestDocument(): Document? {

@@ -102,7 +102,11 @@ class Document(
     }
 
     fun save(): Document {
-        println("Writing subject '$iri' with version '$version'")
+        System.out.printf(
+            "[at:%s][orid:%s] Writing subject '$iri' with version '$version'\n",
+            docCtx.record?.timestamp(),
+            docCtx.id
+        )
 
         try {
             ensureDirectoryTree(this.dir())
