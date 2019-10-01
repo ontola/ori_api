@@ -9,10 +9,11 @@ import org.eclipse.rdf4j.model.Statement
  */
 class ReplaceProcessor : BaseProcessor() {
     override val graphIRI = createIRI("http://purl.org/linked-delta/replace")
-    val supplantIRI = createIRI("http://purl.org/linked-delta/supplant")
+    private val supplantIRI = createIRI("http://purl.org/linked-delta/supplant")
+    private val oldSupplantIRI = createIRI("http://purl.org/link-lib/supplant")
 
     override fun match(st: Statement): Boolean {
-        return st.context == graphIRI || st.context == supplantIRI
+        return st.context == graphIRI || st.context == supplantIRI || st.context == oldSupplantIRI
     }
 
     override fun process(current: Model, delta: Model, st: Statement): DeltaProcessorResult {
