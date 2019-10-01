@@ -35,7 +35,7 @@ internal fun ensureDirectoryTree(filePath: File) {
                 PosixFilePermissions.asFileAttribute(dirPerms)
             )
         } catch (e: IOException) {
-            throw Exception("Couldn't create hash directory tree '$filePath'", e)
+            throw Exception("Couldn't create hash directory tree '$filePath' (${e.message})", e)
         }
     }
 }

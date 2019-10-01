@@ -42,8 +42,11 @@ class Document(
     private val baseDir: File
 ) {
     companion object {
-        fun findExisting(docCtx: ResourceCtx<*>, timestamp: String, baseDir: File): Document {
+        fun findExisting(docCtx: ResourceCtx<*>, timestamp: String, baseDir: File): Document? {
             val d = Document(docCtx.copy(version = timestamp), LinkedHashModel(), baseDir)
+            if (!d.baseDir.exists() || !d.indexFile().exists()) {
+                return null
+            }
             d.read()
             return d
         }
@@ -118,11 +121,15 @@ class Document(
         return this
     }
 
+    internal fun indexFile(): File {
+        return File("$baseDir/$version/$id.nq")
+    }
+
     /**
      * Reads an existing (n-quads) file from disk into the model, overwriting any previous statements.
      */
     private fun read() {
-        val nqFile = File("$baseDir/$version/$id.nq")
+        val nqFile = indexFile()
         val newData = ORio.parseToModel(nqFile.inputStream(), iri.stringValue())
 
         data.clear()

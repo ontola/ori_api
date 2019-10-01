@@ -67,7 +67,7 @@ class EventBus {
 
         try {
             val consumer = KafkaConsumer<String, String>(ctx.kafkaOpts)
-            consumer.subscribe(Arrays.asList(topic))
+            consumer.subscribe(listOf(topic))
 
             val partitionList = consumer
                 .partitionsFor(topic)

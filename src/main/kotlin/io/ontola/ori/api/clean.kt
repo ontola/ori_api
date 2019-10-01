@@ -32,8 +32,15 @@ suspend fun cleanOldVersionsAsync() = GlobalScope.async {
 
     dataDir
         .listFiles()
-        .map { launch { processDir(it.toPath()) } }
-        .forEach { job -> job.join() }
+        ?.map { launch {
+            try {
+                processDir(it.toPath())
+            } catch(e: Exception) {
+                System.out.printf("$e\n")
+                e.printStackTrace()
+            }
+        } }
+        ?.forEach { job -> job.join() }
 }
 
 fun processDir(dir: Path) {
@@ -43,12 +50,11 @@ fun processDir(dir: Path) {
         .toFile()
         .walk()
         .maxDepth(walkDepth)
-        .filter { file -> file.list().any { fileName -> isVersionDir.matches(fileName) } }
+        .filter { file -> file.list()?.any { fileName -> isVersionDir.matches(fileName) } ?: false }
         .flatMap { file ->
             val versions = file.listFiles()
-            val latest =
-                versions.find { v -> v.name == "latest" } ?: throw Exception("File ${file.name} has no 'latest' entry")
-            val latestVersion = latest.canonicalFile
+            val latest = versions?.find { v -> v.name == "latest" }
+            val latestVersion = latest?.canonicalFile
 
             sequenceOf<File>(*versions).filter { f -> f != latest && f != latestVersion }
         }

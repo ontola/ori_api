@@ -25,6 +25,7 @@ import io.ontola.ori.api.context.DocumentCtx
 import io.ontola.rdfUtils.createIRI
 import io.ontola.rdfUtils.tryCreateIRI
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.eclipse.rdf4j.model.IRI
 import org.eclipse.rdf4j.model.vocabulary.ORG
 import org.eclipse.rdf4j.model.vocabulary.RDF
 import org.eclipse.rdf4j.model.vocabulary.VCARD4
@@ -40,13 +41,17 @@ class UpdateProcessor(
         println("[at:${record.timestamp()}] Finished processing update: ${record.key()}, ${record.value()}")
     }
 
-    private suspend fun processHasOrganizationName(record: ConsumerRecord<String, String>) {
-        record
+    private fun iriFromHeader(record: ConsumerRecord<String, String>, property: IRI): IRI? {
+        return record
             .headers()
-            .lastHeader(VCARD4.HAS_ORGANIZATION_NAME.stringValue())
+            .lastHeader(property.stringValue())
             ?.value()
             ?.toString(StandardCharsets.UTF_8)
             ?.let { tryCreateIRI(it) }
+    }
+
+    private suspend fun processHasOrganizationName(record: ConsumerRecord<String, String>) {
+        iriFromHeader(record, VCARD4.HAS_ORGANIZATION_NAME)
             ?.let {
                 val docCtx = DocumentCtx(
                     CtxProps(
@@ -71,12 +76,7 @@ class UpdateProcessor(
     }
 
     private suspend fun processType(record: ConsumerRecord<String, String>) {
-        record
-            .headers()
-            .lastHeader(RDF.TYPE.stringValue())
-            ?.value()
-            ?.toString(StandardCharsets.UTF_8)
-            ?.let { tryCreateIRI(it) }
+        iriFromHeader(record, RDF.TYPE)
             ?.takeIf { it == ORG.ORGANIZATION }
             ?.let {
                 OrganizationsSet.withLock {
