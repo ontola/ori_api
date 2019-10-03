@@ -18,7 +18,10 @@
 
 package io.ontola.rdfUtils
 
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.eclipse.rdf4j.model.BNode
 import org.eclipse.rdf4j.model.IRI
+import org.eclipse.rdf4j.model.Resource
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory
 
 private val factory = SimpleValueFactory.getInstance()
@@ -37,4 +40,16 @@ fun tryCreateIRI(iri: String): IRI? {
 
 fun createIRI(ns: String, term: String): IRI {
     return factory.createIRI("$ns$term")
+}
+
+fun getQueryParameter(iri: Resource, parameter: String): IRI? {
+    if (iri is BNode) {
+        return null
+    }
+
+    return iri
+        .stringValue()
+        .toHttpUrlOrNull()
+        ?.queryParameter(parameter)
+        ?.let { graph -> createIRI(graph) }
 }

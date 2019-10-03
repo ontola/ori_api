@@ -18,12 +18,19 @@
 
 package io.ontola.testhelpers
 
+import io.ontola.ori.api.ORio
 import io.ontola.ori.api.context.CtxProps
 import io.ontola.ori.api.context.DocumentCtx
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.eclipse.rdf4j.model.Model
 
 fun emptyContext(): DocumentCtx {
     return DocumentCtx(CtxProps())
+}
+
+fun nqResourceToModel(testResource: String): Model {
+    val body = testResource.asResource()
+    return ORio.parseToModel(body)
 }
 
 fun deltaDocument(testResource: String): DocumentCtx {

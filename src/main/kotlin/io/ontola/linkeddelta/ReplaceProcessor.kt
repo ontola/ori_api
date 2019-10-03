@@ -13,7 +13,8 @@ class ReplaceProcessor : BaseProcessor() {
     private val oldSupplantIRI = createIRI("http://purl.org/link-lib/supplant")
 
     override fun match(st: Statement): Boolean {
-        return st.context == graphIRI || st.context == supplantIRI || st.context == oldSupplantIRI
+        val context = withoutGraph(st.context)
+        return context == graphIRI || context == supplantIRI || context == oldSupplantIRI
     }
 
     override fun process(current: Model, delta: Model, st: Statement): DeltaProcessorResult {

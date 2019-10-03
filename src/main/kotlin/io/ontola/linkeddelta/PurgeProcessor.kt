@@ -7,13 +7,11 @@ import org.eclipse.rdf4j.model.Statement
 /**
  * Removes all the statements of a subject from the store, disregarding the predicate and object of the statement
  */
-class PurgeProcessor : DeltaProcessor {
+class PurgeProcessor : BaseProcessor() {
     override val graphIRI = createIRI("http://purl.org/linked-delta/purge")
 
-    private val emptyStArr = emptyList<Statement>();
-
     override fun match(st: Statement): Boolean {
-        return st.context == graphIRI
+        return withoutGraph(st.context) == graphIRI
     }
 
     override fun process(current: Model, delta: Model, st: Statement): DeltaProcessorResult {

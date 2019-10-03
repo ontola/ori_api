@@ -19,10 +19,13 @@
 package io.ontola.ori.api
 
 import io.ontola.ori.api.context.ResourceCtx
+import io.ontola.rdfUtils.createIRI
+import io.ontola.rdfUtils.getQueryParameter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.eclipse.rdf4j.model.*
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
+import java.net.URI
 import java.util.*
 
 private typealias PartitionMap = HashMap<Resource, List<Statement>>
@@ -66,20 +69,27 @@ class DeltaEvent(
 
     /** Partitions a delta into separately processable slices. */
     internal fun partition(): Map<IRI, DocumentSet> {
-        val subjectBuckets = this.splitBySubject(data)
+        val subjectBuckets = this.splitByDocument(data)
         return partitionPerDocument(subjectBuckets)
     }
 
-    private fun splitBySubject(model: Model): PartitionMap {
+    /**
+     * Partitions a model by target graph / base document. Any fragment in the IRI will be trimmed, for it cannot be
+     * queried from the web as a document.
+     *
+     * The context's `graph` query parameter takes precedence over the subject.
+     */
+    private fun splitByDocument(model: Model): PartitionMap {
         val partitions = PartitionMap()
 
         // TODO: implement an RDFHandler which does this while parsing
         for (s: Statement in model) {
-            val stmtList = partitions[s.subject]
+            val doc = this.doc(s.context?.let { getQueryParameter(s.context, "graph") } ?: s.subject)
+            val stmtList = partitions[doc]
             if (!stmtList.isNullOrEmpty()) {
-                partitions[s.subject] = stmtList.plus(s)
+                partitions[doc] = stmtList.plus(s)
             } else {
-                partitions[s.subject] = listOf(s)
+                partitions[doc] = listOf(s)
             }
         }
 
@@ -88,20 +98,22 @@ class DeltaEvent(
 
     /** Organizes anonymous resources into the bucket which refers to them */
     private fun partitionPerDocument(buckets: PartitionMap): Map<IRI, DocumentSet> {
-        val bNodeForestReferences = HashMap<BNode, IRI>()
+        val bNodeForestReferences = HashMap<BNode, Resource>()
         val forests = buckets
             .filterKeys { key -> key is IRI }
             .map { bucket ->
                 val iri = bucket.key as IRI
-                val docSet = DocumentSet(docCtx.copy(iri = iri))
+                val model = LinkedHashModel()
                 bucket.value.forEach { statement ->
                     val obj = statement.`object`
-                    if (obj is BNode) bNodeForestReferences[obj] = statement.subject as IRI
+                    if (obj is BNode) {
+                        bNodeForestReferences[obj] = statement.subject
+                    }
 
-                    docSet.deltaAdd(statement)
+                    model.add(statement)
                 }
 
-                iri to docSet
+                iri to DocumentSet(docCtx.copy(iri = iri), model)
             }
             .toMap()
 
@@ -122,5 +134,23 @@ class DeltaEvent(
     private fun handleDanglingNode(bucket: PartitionEntry) {
         val danglingResource = LinkedHashModel(data.filter { s -> s.subject == bucket.key })
         EventBus.getBus().publishError("dangling-resource", danglingResource, null)
+    }
+
+    private fun doc(subject: Resource): Resource {
+        if (subject is BNode) {
+            return subject
+        }
+
+        val subj = URI(subject.stringValue())
+
+        return createIRI(URI(
+            subj.scheme,
+            subj.userInfo,
+            subj.host,
+            subj.port,
+            subj.path,
+            subj.query,
+            null
+        ).toString())
     }
 }

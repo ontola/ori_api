@@ -22,7 +22,6 @@ import io.ontola.linkeddelta.applyDelta
 import io.ontola.linkeddelta.processors
 import io.ontola.ori.api.context.ResourceCtx
 import org.eclipse.rdf4j.model.Model
-import org.eclipse.rdf4j.model.Resource
 import org.eclipse.rdf4j.model.Statement
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 import java.io.File
@@ -33,7 +32,7 @@ import java.util.*
 
 class DocumentSet(
     private val docCtx: ResourceCtx<*>,
-    private val delta: Model = LinkedHashModel()
+    internal val delta: Model = LinkedHashModel()
 ) {
     private val iri = docCtx.iri!!
     private val baseDir = docCtx.dir()
