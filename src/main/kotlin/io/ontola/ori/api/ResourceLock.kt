@@ -19,50 +19,42 @@
 package io.ontola.ori.api
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import org.redisson.Redisson
 import org.redisson.api.RLock
 import java.io.File
-import java.util.*
-
-private val rLockMap: WeakHashMap<String, Mutex> = WeakHashMap()
 
 private val redis = Redisson.create(ORIContext.getCtx().redis)
 
 class ResourceLock(
     val name: String,
-    private val lock: Mutex,
     private val distLock: RLock
-) : Mutex by lock {
-    override suspend fun lock(owner: Any?) {
-        lock.lock(owner)
+) {
+    fun lock(owner: Any? = null) : Boolean {
         distLock.lock()
+
+        return true
     }
 
-    override fun unlock(owner: Any?) {
-        lock.unlock(owner)
+    fun unlock(owner: Any? = null) : Boolean {
         distLock.unlock()
+
+        return true
     }
 }
 
-fun createLock(file: File): Mutex {
+fun createLock(file: File): ResourceLock {
     val path = file.toPath().toString()
-
-    val mutex = rLockMap.computeIfAbsent(path) {
-        Mutex()
-    }
+    val rlock = redis.getLock(path)
 
     return ResourceLock(
         path,
-        mutex,
-        redis.getLock(path)
+        rlock
     )
 }
 
-suspend inline fun <T> Mutex.withLock(crossinline action: () -> T): T = withContext(Dispatchers.IO) {
-    async { lock() }.join()
+suspend inline fun <T> ResourceLock.withLock(crossinline action: () -> T): T = withContext(Dispatchers.IO) {
+    lock()
     try {
         return@withContext action()
     } finally {

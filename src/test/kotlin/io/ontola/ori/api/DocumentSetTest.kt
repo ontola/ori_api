@@ -21,7 +21,6 @@ package io.ontola.ori.api
 import io.kotlintest.matchers.file.shouldContainFile
 import io.kotlintest.matchers.file.shouldExist
 import io.kotlintest.should
-import io.kotlintest.shouldBe
 import io.kotlintest.shouldNotBe
 import io.kotlintest.specs.StringSpec
 import io.ontola.activitystreams.vocabulary.AS
@@ -79,11 +78,6 @@ class DocumentSetTest : StringSpec({
             docSet.lock.lock()
 
             docSet.lock shouldNotBe docSetInterfere.lock
-
-            docSetInterfere.lock.tryLock() shouldBe false
-
-            docSet.lock.unlock()
-            docSetInterfere.lock.tryLock() shouldBe true
         }
     }
 })

@@ -51,39 +51,38 @@ class DocumentSet(
         return delta.add(s.subject, s.predicate, s.`object`, s.context)
     }
 
-    suspend fun process() {
+    fun process() {
         System.out.printf("[at:%s][orid:%s] starting processing\n", docCtx.record?.timestamp(), docCtx.id)
-        lock.withLock {
-            try {
-                ensureDirectoryTree(baseDir)
-            } catch (e: Exception) {
-                EventBus.getBus().publishError(docCtx, e)
-                return@withLock
-            }
-            val latestVersion = findLatestDocument()
-            val newVersion = initNewVersion(latestVersion)
-
-            val eventType = when {
-                latestVersion == null -> EventType.CREATE
-                latestVersion != newVersion -> EventType.UPDATE
-                else -> return@withLock
-            }
-            val org = try {
-                newVersion.organization
-            } catch (e: Exception) {
-                EventBus
-                    .getBus()
-                    .publishError(this.docCtx, e)
-                null
-            }
-            val event = Event(eventType, iri, org, newVersion.data)
-
-            newVersion.save()
-            updateActivityStream(event, newVersion, latestVersion)
-            newVersion.archive()
-            updateLatest(newVersion)
-            publishBlocking(event)
+        try {
+            ensureDirectoryTree(baseDir)
+        } catch (e: Exception) {
+            EventBus.getBus().publishError(docCtx, e)
+            return
         }
+        val latestVersion = findLatestDocument()
+        val newVersion = initNewVersion(latestVersion)
+
+        val eventType = when {
+            latestVersion == null -> EventType.CREATE
+            latestVersion != newVersion -> EventType.UPDATE
+            else -> return //@withLockTest
+        }
+        val org = try {
+            newVersion.organization
+        } catch (e: Exception) {
+            EventBus
+                .getBus()
+                .publishError(this.docCtx, e)
+            null
+        }
+        val event = Event(eventType, iri, org, newVersion.data)
+
+        newVersion.save()
+        updateActivityStream(event, newVersion, latestVersion)
+        newVersion.archive()
+        updateLatest(newVersion)
+        publishBlocking(event)
+
         System.out.printf("[at:%s][orid:%s] finished processing\n", docCtx.record?.timestamp(), docCtx.id)
     }
 
