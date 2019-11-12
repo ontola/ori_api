@@ -29,6 +29,7 @@ import org.eclipse.rdf4j.model.IRI
 import org.eclipse.rdf4j.model.vocabulary.ORG
 import org.eclipse.rdf4j.model.vocabulary.RDF
 import org.eclipse.rdf4j.model.vocabulary.VCARD4
+import java.lang.Exception
 import java.nio.charset.StandardCharsets
 
 class UpdateProcessor(
@@ -36,9 +37,14 @@ class UpdateProcessor(
 ) {
     suspend fun process() {
         println("[at:${record.timestamp()}] Process update: ${record.key()}, ${record.value()}")
-        processHasOrganizationName(record)
-        processType(record)
-        println("[at:${record.timestamp()}] Finished processing update: ${record.key()}, ${record.value()}")
+        try {
+            processHasOrganizationName(record)
+            processType(record)
+            println("[at:${record.timestamp()}] Finished processing update: ${record.key()}, ${record.value()}")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            println("[at:${record.timestamp()}] Processing update failed: ${record.key()}, ${record.value()}")
+        }
     }
 
     private fun iriFromHeader(record: ConsumerRecord<String, String>, property: IRI): IRI? {

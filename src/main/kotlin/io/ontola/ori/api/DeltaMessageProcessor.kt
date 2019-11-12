@@ -36,7 +36,11 @@ class DeltaMessageProcessor(private val docCtx: ResourceCtx<*>) {
             printlnWithThread("[at:%s][end] Done with message\n", record?.timestamp())
         } catch (e: Exception) {
             EventBus.getBus().publishError(docCtx, e)
-            printlnWithThread("Exception while processing delta event: '%s'\n", e.toString())
+            printlnWithThread(
+                "[at:%s][end] Exception while processing delta: '%s'\n",
+                record?.timestamp(),
+                e.toString()
+            )
             e.printStackTrace()
         }
     }

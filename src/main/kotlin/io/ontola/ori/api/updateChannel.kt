@@ -24,7 +24,6 @@ import kotlinx.coroutines.channels.produce
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import java.time.Duration
-import kotlin.system.exitProcess
 
 /**
  * Processes messages from the 'updates' channel. Updates are downstream from the delta's, containing aggregate
@@ -46,7 +45,9 @@ suspend fun processUpdates(): Job {
         } catch (e: Exception) {
             println("Fatal error occurred: ${e.message}")
             e.printStackTrace()
-            exitProcess(1)
+            val j = Job()
+            j.cancel()
+            return@withContext j
         }
     }
 }
