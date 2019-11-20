@@ -15,7 +15,7 @@ val processors = listOf(
 
 private fun replaceMatches(store: Model, replacements: List<Statement>) {
     for (st in replacements) {
-        store.removeAll(store.filter(st.subject, st.predicate, null, null))
+        store.removeAll(store.filter(st.subject, st.predicate, null, null).toList())
     }
 
     store.addAll(replacements)

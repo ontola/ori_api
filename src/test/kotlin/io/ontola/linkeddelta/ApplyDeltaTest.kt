@@ -24,6 +24,7 @@ import io.ontola.activitystreams.vocabulary.SCHEMA
 import org.eclipse.rdf4j.model.Statement
 import org.eclipse.rdf4j.model.impl.LinkedHashModel
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory
+import org.eclipse.rdf4j.model.vocabulary.RDF
 
 class ApplyDeltaTest : WordSpec({
     val factory = SimpleValueFactory.getInstance()
@@ -56,6 +57,33 @@ class ApplyDeltaTest : WordSpec({
             delta.add(statement)
 
             applyDelta(processors, current, delta) shouldHaveSize 1
+        }
+
+        "has safe replacement" {
+            val resource = factory.createIRI("http://test.org/")
+            val c1 = factory.createStatement(resource, SCHEMA.NAME, factory.createLiteral("test"))
+            val c2 = factory.createStatement(resource, SCHEMA.CREATOR, factory.createIRI("http://test.org/person/1"))
+            val c2b = factory.createStatement(resource, SCHEMA.CREATOR, factory.createIRI("http://test.org/person/3"))
+            val c3 = factory.createStatement(resource, RDF.TYPE, SCHEMA.custom("Thing"))
+
+            val current = LinkedHashModel(listOf(c1, c2, c2b, c3))
+
+            val d1 = factory.createStatement(
+                resource,
+                SCHEMA.CREATOR,
+                factory.createIRI("http://test.org/person/2"),
+                factory.createIRI("http://purl.org/linked-delta/replace")
+            )
+            val d2 = factory.createStatement(
+                resource,
+                SCHEMA.custom("description"),
+                factory.createLiteral("desc"),
+                factory.createIRI("http://purl.org/linked-delta/add")
+            )
+
+            val delta = LinkedHashModel(listOf(d1, d2))
+
+            applyDelta(processors, current, delta) shouldHaveSize 4
         }
     }
 })
