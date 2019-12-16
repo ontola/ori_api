@@ -51,7 +51,6 @@ fun main(args: Array<String>) = runBlocking {
     when (primaryFlag) {
         "--clean-old-versions" -> {
             cleanOldVersionsAsync().await()
-            exitProcess(0)
         }
         else -> {
             val cmd = arrayListOf("processDeltas", primaryFlag).joinToString(" ")

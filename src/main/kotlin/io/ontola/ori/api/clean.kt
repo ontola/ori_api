@@ -20,30 +20,35 @@ package io.ontola.ori.api
 
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
-import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.file.Path
 
 private const val walkDepth = 8
 
-suspend fun cleanOldVersionsAsync() = GlobalScope.async {
+fun cleanOldVersionsAsync() = GlobalScope.async {
     val ctx = ORIContext.getCtx()
     val dataDir = File(ctx.config.getProperty("ori.api.dataDir"))
 
+    println("Starting cleaning old versions")
     dataDir
-        .listFiles()
-        ?.map { launch {
+        .walk()
+        .maxDepth(1)
+        .forEach {
             try {
-                processDir(it.toPath())
+                if (it != dataDir) {
+                    processDir(it.toPath())
+                }
             } catch(e: Exception) {
                 System.out.printf("$e\n")
                 e.printStackTrace()
             }
-        } }
-        ?.forEach { job -> job.join() }
+        }
+
+    println("Finished cleaning files")
 }
 
 fun processDir(dir: Path) {
+    println("Cleaning $dir")
     val isVersionDir = DocumentSet.versionStringMatcher
 
     dir
