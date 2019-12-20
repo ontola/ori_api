@@ -68,7 +68,7 @@ class DocumentCtx(override val ctx: CtxProps) : ResourceCtx<DocumentCtx>(ctx) {
         val md5sum = digester.digest(id?.toByteArray())
         val hashedId = String.format("%032x", BigInteger(1, md5sum))
 
-        return Splitter.fixedLength(8).split(hashedId).joinToString("/")
+        return Splitter.fixedLength(16).split(hashedId).joinToString("/")
     }
 
     companion object {
