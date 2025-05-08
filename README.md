@@ -1,3 +1,5 @@
+_This project is deprecated / no longer maintained. We limited the scope of OpenRaadsinformatie to document search and removed linked data retrievability. See [Open Raadsinformatie](https://github.com/openstate/open-raadsinformatie/) for that project._
+
 # ORI API
 
 Serves the REST Linked Data API for [Open Raadsinformatie](https://github.com/openstate/open-raadsinformatie/), available at `http://id.openraadsinformatie.nl`. There are other APIs available for this dataset as well ([docs](https://docs.openraadsinformatie.nl)).
